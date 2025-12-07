@@ -1,0 +1,89 @@
+.leave-balance-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.leave-balance-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+}
+
+.leave-balance-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+}
+
+.leave-balance-card.annual::before {
+    background: var(--primary);
+}
+
+.leave-balance-card.sick::before {
+    background: var(--success);
+}
+
+.leave-balance-card.personal::before {
+    background: var(--warning);
+}
+
+.leave-balance-card h4 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.balance-numbers {
+    margin-bottom: 12px;
+}
+
+.balance-numbers .remaining {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.balance-numbers .total {
+    font-size: 14px;
+    color: var(--text-tertiary);
+}
+
+.balance-bar {
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.balance-progress {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.5s ease;
+}
+
+.leave-balance-card.annual .balance-progress {
+    background: var(--primary);
+}
+
+.leave-balance-card.sick .balance-progress {
+    background: var(--success);
+}
+
+.leave-balance-card.personal .balance-progress {
+    background: var(--warning);
+}
+
+@media (max-width: 768px) {
+    .leave-balance-grid {
+        grid-template-columns: 1fr;
+    }
+}

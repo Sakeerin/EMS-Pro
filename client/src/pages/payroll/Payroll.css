@@ -1,0 +1,79 @@
+.text-success {
+    color: var(--success);
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.payslip-modal {
+    max-width: 600px;
+}
+
+.payslip-content {
+    font-size: 14px;
+}
+
+.payslip-header {
+    text-align: center;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.payslip-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.payslip-header p {
+    color: var(--text-secondary);
+}
+
+.payslip-employee {
+    background: var(--bg-tertiary);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+.payslip-section {
+    margin-bottom: 20px;
+}
+
+.payslip-section h4 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.payslip-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+}
+
+.payslip-row.total {
+    font-weight: 600;
+    border-top: 1px solid var(--border-color);
+    margin-top: 8px;
+    padding-top: 12px;
+}
+
+.payslip-net {
+    display: flex;
+    justify-content: space-between;
+    background: var(--primary-gradient);
+    color: white;
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    font-size: 18px;
+    font-weight: 700;
+}

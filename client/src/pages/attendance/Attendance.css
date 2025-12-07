@@ -1,0 +1,102 @@
+.attendance-clock-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 32px;
+}
+
+.clock-widget {
+    background: var(--primary-gradient);
+    border-radius: var(--radius-xl);
+    padding: 40px;
+    text-align: center;
+    color: white;
+    min-width: 400px;
+    box-shadow: 0 20px 40px rgba(99, 102, 241, 0.3);
+}
+
+.clock-display {
+    margin-bottom: 24px;
+}
+
+.clock-time {
+    display: block;
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+
+.clock-date {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.clock-status {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-md);
+    backdrop-filter: blur(10px);
+}
+
+.status-item svg {
+    font-size: 20px;
+}
+
+.status-label {
+    display: block;
+    font-size: 11px;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-time {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.clock-actions {
+    margin-top: 16px;
+}
+
+.clock-actions .btn {
+    min-width: 160px;
+}
+
+.completed-message {
+    padding: 16px;
+}
+
+.completed-message .badge {
+    font-size: 14px;
+    padding: 8px 16px;
+}
+
+@media (max-width: 480px) {
+    .clock-widget {
+        min-width: auto;
+        width: 100%;
+        padding: 24px;
+    }
+
+    .clock-time {
+        font-size: 36px;
+    }
+
+    .clock-status {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
