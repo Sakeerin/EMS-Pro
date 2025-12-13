@@ -66,7 +66,16 @@ export const employeeAPI = {
     uploadAvatar: (id, formData) => api.post(`/employees/${id}/avatar`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     }),
-    getStats: () => api.get('/employees/stats/overview')
+    getStats: () => api.get('/employees/stats/overview'),
+    generateId: () => api.get('/employees/generate-id'),
+    getSupervisors: (level, department) => api.get('/employees/supervisors', { params: { level, department } }),
+    uploadJD: (id, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post(`/employees/${id}/upload-jd`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    }
 };
 
 // Department API
@@ -113,4 +122,16 @@ export const payrollAPI = {
 export const dashboardAPI = {
     getStats: () => api.get('/dashboard/stats'),
     getRecentActivities: () => api.get('/dashboard/recent-activities')
+};
+
+// User API (SuperAdmin only)
+export const userAPI = {
+    getAll: (params) => api.get('/users', { params }),
+    getById: (id) => api.get(`/users/${id}`),
+    create: (data) => api.post('/users', data),
+    update: (id, data) => api.put(`/users/${id}`, data),
+    linkEmployee: (id, employeeId) => api.put(`/users/${id}/link-employee`, { employeeId }),
+    unlinkEmployee: (id) => api.put(`/users/${id}/link-employee`, { employeeId: null }),
+    delete: (id) => api.delete(`/users/${id}`),
+    getUnlinkedEmployees: () => api.get('/users/employees/unlinked')
 };

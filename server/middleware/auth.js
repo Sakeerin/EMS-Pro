@@ -61,3 +61,16 @@ export const generateToken = (id) => {
         expiresIn: process.env.JWT_EXPIRE || '7d'
     });
 };
+
+// Role helper functions
+export const isSuperAdmin = (role) => role === 'superadmin';
+export const isAdminOrAbove = (role) => ['superadmin', 'admin'].includes(role);
+export const isHROrAbove = (role) => ['superadmin', 'admin', 'hr'].includes(role);
+
+// Permission helper functions
+export const canManageUsers = (role) => role === 'superadmin';
+export const canDeleteEmployee = (role) => ['superadmin', 'admin'].includes(role);
+export const canEditEmployee = (role) => ['superadmin', 'admin', 'hr'].includes(role);
+export const canManageDepartments = (role) => ['superadmin', 'admin', 'hr'].includes(role);
+export const canApproveLeaves = (role) => ['superadmin', 'admin', 'hr'].includes(role);
+export const canManagePayroll = (role) => ['superadmin', 'admin'].includes(role);

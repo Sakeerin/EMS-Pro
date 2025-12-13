@@ -56,7 +56,7 @@ router.get('/:id', protect, async (req, res) => {
 // @route   POST /api/departments
 // @desc    Create new department
 // @access  Private (Admin)
-router.post('/', protect, authorize('admin'), async (req, res) => {
+router.post('/', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const department = await Department.create(req.body);
 
@@ -75,7 +75,7 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
 // @route   PUT /api/departments/:id
 // @desc    Update department
 // @access  Private (Admin)
-router.put('/:id', protect, authorize('admin'), async (req, res) => {
+router.put('/:id', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const department = await Department.findByIdAndUpdate(
             req.params.id,
@@ -105,7 +105,7 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
 // @route   DELETE /api/departments/:id
 // @desc    Delete department (soft delete)
 // @access  Private (Admin)
-router.delete('/:id', protect, authorize('admin'), async (req, res) => {
+router.delete('/:id', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const department = await Department.findByIdAndUpdate(
             req.params.id,

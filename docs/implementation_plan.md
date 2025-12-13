@@ -1,307 +1,256 @@
-# MERN Stack Employee Management System - Implementation Plan
+# User Management & Role-Based Access Control Implementation
 
-ระบบจัดการพนักงานที่ทันสมัย ครบครันทุกฟังก์ชัน พร้อม UI/UX ระดับ Premium
+This plan adds a comprehensive User Management feature with a new 4-tier role system and enhanced page-level permissions.
 
-## Tech Stack
+## Role Structure & Permissions
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | React 18 + Vite + React Router v6 |
-| **UI Library** | Custom CSS + Framer Motion (animations) |
-| **State Management** | React Query (TanStack Query) + Context API |
-| **Backend** | Node.js + Express.js |
-| **Database** | MongoDB + Mongoose ODM |
-| **Authentication** | JWT + bcrypt |
-| **File Upload** | Multer + Cloudinary |
-| **Charts** | Recharts |
-| **PDF/Excel** | jsPDF + xlsx |
-
----
-
-## Project Structure
-
-```
-Employee-Management-System/
-├── client/                    # React Frontend
-│   ├── public/
-│   ├── src/
-│   │   ├── assets/           # Images, icons
-│   │   ├── components/       # Reusable components
-│   │   │   ├── common/       # Button, Input, Modal, etc.
-│   │   │   ├── layout/       # Sidebar, Header, Footer
-│   │   │   └── charts/       # Chart components
-│   │   ├── pages/            # Route pages
-│   │   │   ├── auth/         # Login, Register, ForgotPassword
-│   │   │   ├── dashboard/    # Admin/Employee dashboard
-│   │   │   ├── employees/    # Employee management
-│   │   │   ├── attendance/   # Attendance tracking
-│   │   │   ├── leaves/       # Leave management
-│   │   │   ├── payroll/      # Payroll & salary
-│   │   │   └── settings/     # System settings
-│   │   ├── hooks/            # Custom hooks
-│   │   ├── services/         # API services
-│   │   ├── context/          # React Context
-│   │   ├── utils/            # Helper functions
-│   │   └── styles/           # Global CSS
-│   └── package.json
-│
-├── server/                    # Express Backend
-│   ├── config/               # Database & app config
-│   ├── controllers/          # Route controllers
-│   ├── middleware/           # Auth, error handling
-│   ├── models/               # Mongoose models
-│   ├── routes/               # API routes
-│   ├── utils/                # Helper functions
-│   ├── uploads/              # File uploads
-│   └── package.json
-│
-└── README.md
-```
+| Feature | SuperAdmin | Admin | HR | Employee |
+|---------|------------|-------|-----|----------|
+| **User Management** | ✅ Full | ❌ | ❌ | ❌ |
+| **Employees - View** | ✅ | ✅ | ✅ | ❌ |
+| **Employees - Add/Edit** | ✅ | ✅ | ✅ | ❌ |
+| **Employees - Delete** | ✅ | ✅ | ❌ | ❌ |
+| **Departments - View** | ✅ | ✅ | ✅ | ❌ |
+| **Departments - Add/Edit/Delete** | ✅ | ✅ | ✅ | ❌ |
+| **Attendance** | ✅ All | ✅ All | ✅ All | ✅ Own only |
+| **Leaves** | ✅ All + Approve | ✅ All + Approve | ✅ All + Approve | ✅ Own only (Calendar view) |
+| **Payroll** | ✅ All + Manage | ✅ All + Manage | ✅ View All | ✅ Own only (Download slips) |
+| **Dashboard** | ✅ Full KPIs | ✅ Full KPIs | ✅ Full KPIs | ✅ Own info only |
+| **Settings** | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
 ## Proposed Changes
 
-### Phase 1: Project Infrastructure
+### Phase 1: Backend - Role System Update
 
-#### [NEW] server/package.json
-Setup Express server with dependencies: express, mongoose, cors, dotenv, bcryptjs, jsonwebtoken, multer
+#### [MODIFY] [User.js](file:///d:/Projects/Employee-Management-System/server/models/User.js)
 
-#### [NEW] server/config/db.js
-MongoDB connection configuration
-
-#### [NEW] server/server.js
-Main Express server entry point with middleware setup
-
-#### [NEW] client/package.json
-Vite + React setup with react-router, axios, recharts, framer-motion
-
----
-
-### Phase 2: Database Models
-
-#### [NEW] server/models/User.js
+Update role enum from `['admin', 'hr', 'manager', 'employee']` to:
 ```javascript
-{
-  email, password, role: ['admin', 'hr', 'manager', 'employee'],
-  employee: ObjectId (ref Employee), isActive, lastLogin
-}
-```
-
-#### [NEW] server/models/Employee.js
-```javascript
-{
-  employeeId, firstName, lastName, email, phone, avatar,
-  department: ObjectId, position: ObjectId, manager: ObjectId,
-  dateOfBirth, gender, address, hireDate, salary, status
-}
-```
-
-#### [NEW] server/models/Department.js
-```javascript
-{ name, description, manager: ObjectId, employees: [ObjectId] }
-```
-
-#### [NEW] server/models/Attendance.js
-```javascript
-{
-  employee: ObjectId, date, checkIn, checkOut,
-  workingHours, overtime, status: ['present', 'late', 'absent']
-}
-```
-
-#### [NEW] server/models/Leave.js
-```javascript
-{
-  employee: ObjectId, type: ['annual', 'sick', 'personal'],
-  startDate, endDate, reason, status: ['pending', 'approved', 'rejected'],
-  approvedBy: ObjectId
-}
-```
-
-#### [NEW] server/models/Payroll.js
-```javascript
-{
-  employee: ObjectId, month, year, baseSalary, overtime,
-  deductions, bonus, netSalary, status: ['pending', 'paid']
+role: {
+    type: String,
+    enum: ['superadmin', 'admin', 'hr', 'employee'],
+    default: 'employee'
 }
 ```
 
 ---
 
-### Phase 3: API Routes
+#### [MODIFY] [auth.js](file:///d:/Projects/Employee-Management-System/server/middleware/auth.js)
 
-#### [NEW] server/routes/auth.routes.js
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/forgot-password
-- GET /api/auth/me
-
-#### [NEW] server/routes/employee.routes.js
-- GET /api/employees (with pagination, search, filter)
-- GET /api/employees/:id
-- POST /api/employees
-- PUT /api/employees/:id
-- DELETE /api/employees/:id
-- POST /api/employees/:id/avatar
-
-#### [NEW] server/routes/department.routes.js
-- CRUD for departments
-
-#### [NEW] server/routes/attendance.routes.js
-- POST /api/attendance/check-in
-- POST /api/attendance/check-out
-- GET /api/attendance/my
-- GET /api/attendance/report
-
-#### [NEW] server/routes/leave.routes.js
-- CRUD for leave requests
-- PUT /api/leaves/:id/approve
-- PUT /api/leaves/:id/reject
-
-#### [NEW] server/routes/payroll.routes.js
-- CRUD for payroll
-- GET /api/payroll/generate/:month/:year
-- GET /api/payroll/payslip/:id
+Update the `authorize` middleware to handle new roles and add helper functions:
+- `isSuperAdmin(role)` - Check if SuperAdmin
+- `canManageUsers(role)` - Only SuperAdmin
+- `canDeleteEmployee(role)` - SuperAdmin or Admin
+- `canManageDepartments(role)` - SuperAdmin, Admin, or HR
 
 ---
 
-### Phase 4: React Frontend
+#### [NEW] [user.routes.js](file:///d:/Projects/Employee-Management-System/server/routes/user.routes.js)
 
-#### [NEW] client/src/App.jsx
-Main app with routing and theme provider
+Create new Express routes for user management (**SuperAdmin only**):
 
-#### [NEW] client/src/styles/index.css
-Premium design system with:
-- CSS Variables for theming (dark/light)
-- Glassmorphism effects
-- Modern gradients
-- Smooth animations
-
-#### [NEW] client/src/components/layout/Sidebar.jsx
-Collapsible sidebar with navigation and user info
-
-#### [NEW] client/src/components/layout/Header.jsx
-Top header with search, notifications, profile
-
-#### [NEW] client/src/pages/auth/Login.jsx
-Modern login page with animations
-
-#### [NEW] client/src/pages/dashboard/Dashboard.jsx
-Admin dashboard with KPI cards, charts, recent activities
-
-#### [NEW] client/src/pages/employees/EmployeeList.jsx
-Employee table with search, filter, pagination
-
-#### [NEW] client/src/pages/employees/EmployeeForm.jsx
-Add/Edit employee form with validation
-
-#### [NEW] client/src/pages/attendance/AttendancePage.jsx
-Check-in/out with calendar view
-
-#### [NEW] client/src/pages/leaves/LeavePage.jsx
-Leave management with approval workflow
-
-#### [NEW] client/src/pages/payroll/PayrollPage.jsx
-Payroll management and payslip generation
+**Endpoints:**
+- `GET /api/users` - List all users with pagination, search, filtering
+- `GET /api/users/:id` - Get single user details
+- `POST /api/users` - Create new user with role assignment
+- `PUT /api/users/:id` - Update user (email, role, isActive)
+- `PUT /api/users/:id/link-employee` - Link user to employee profile
+- `DELETE /api/users/:id` - Soft delete (deactivate user)
 
 ---
 
-## Key Features
+#### [MODIFY] [employee.routes.js](file:///d:/Projects/Employee-Management-System/server/routes/employee.routes.js)
 
-### 🔐 Authentication & Security
-- JWT-based authentication with refresh tokens
-- Role-based access control (RBAC)
-- Password encryption with bcrypt
-- Protected routes
+Update delete endpoint to require `authorize('superadmin', 'admin')` instead of allowing HR.
 
-### 👥 Employee Management
-- Complete CRUD operations
-- Profile photo upload
-- Department assignment
-- Advanced search & filtering
-- Bulk import/export (Excel)
+---
 
-### ⏰ Attendance System
-- Real-time check-in/check-out
-- Geolocation tracking (optional)
-- Attendance reports by day/week/month
-- Overtime calculation
+#### [MODIFY] [index.js](file:///d:/Projects/Employee-Management-System/server/index.js)
 
-### 🏖️ Leave Management
-- Multiple leave types
-- Approval workflow
-- Leave balance tracking
-- Holiday calendar integration
+Register the new user routes.
 
-### 💰 Payroll
-- Salary structure management
-- Automatic payroll calculation
-- Payslip PDF generation
-- Tax deductions
+---
 
-### 📊 Dashboard & Analytics
-- Real-time KPI cards
-- Interactive charts (Bar, Line, Pie, Area)
-- Employee statistics
-- Export to PDF/Excel
+### Phase 2: Frontend - Role Context & API
 
-### 🎨 Modern UI/UX
-- Glassmorphism design
-- Dark/Light theme toggle
-- Smooth animations (Framer Motion)
-- Fully responsive
-- Loading skeletons
-- Toast notifications
+#### [MODIFY] [AuthContext.jsx](file:///d:/Projects/Employee-Management-System/client/src/context/AuthContext.jsx)
+
+Update role helpers:
+```javascript
+const isSuperAdmin = user?.role === 'superadmin';
+const isAdmin = user?.role === 'admin' || isSuperAdmin;
+const isHR = user?.role === 'hr' || isAdmin;
+const isEmployee = user?.role === 'employee';
+
+// Permission helpers
+const canManageUsers = isSuperAdmin;
+const canDeleteEmployee = isSuperAdmin || user?.role === 'admin';
+const canEditEmployee = isHR || isAdmin || isSuperAdmin;
+```
+
+---
+
+#### [MODIFY] [api.js](file:///d:/Projects/Employee-Management-System/client/src/services/api.js)
+
+Add new `userAPI` object:
+```javascript
+export const userAPI = {
+    getAll: (params) => api.get('/users', { params }),
+    getById: (id) => api.get(`/users/${id}`),
+    create: (data) => api.post('/users', data),
+    update: (id, data) => api.put(`/users/${id}`, data),
+    linkEmployee: (id, employeeId) => api.put(`/users/${id}/link-employee`, { employeeId }),
+    delete: (id) => api.delete(`/users/${id}`)
+};
+```
+
+---
+
+### Phase 3: Frontend - User Management Page
+
+#### [NEW] [UserList.jsx](file:///d:/Projects/Employee-Management-System/client/src/pages/users/UserList.jsx)
+
+Main user management page (**SuperAdmin only**) featuring:
+- Data table: Email, Role, Linked Employee, Status, Last Login, Actions
+- Search by email
+- Filter by role and status
+- Create User modal with role dropdown
+- Edit User modal
+- Link to Employee functionality
+- Activate/Deactivate toggle
+- Modern glassmorphism design
+
+---
+
+#### [NEW] [UserList.css](file:///d:/Projects/Employee-Management-System/client/src/pages/users/UserList.css)
+
+Styles with:
+- Role badges: SuperAdmin (purple), Admin (blue), HR (green), Employee (gray)
+- Status indicators (active/inactive)
+- Modal forms
+- Consistent with existing pages
+
+---
+
+### Phase 4: Frontend - Employee Dashboard Update
+
+#### [MODIFY] [Dashboard.jsx](file:///d:/Projects/Employee-Management-System/client/src/pages/dashboard/Dashboard.jsx)
+
+Conditional rendering based on role:
+- **SuperAdmin/Admin/HR**: Show full dashboard with all KPIs, charts, recent activities
+- **Employee**: Show personal dashboard only:
+  - Welcome card with name and position
+  - Today's attendance status
+  - Leave balance summary
+  - Recent payslips
+  - Quick actions (Check In/Out, Request Leave)
+
+---
+
+### Phase 5: Frontend - Leave Calendar View
+
+#### [MODIFY] [LeavePage.jsx](file:///d:/Projects/Employee-Management-System/client/src/pages/leaves/LeavePage.jsx)
+
+Add calendar view for employees:
+- Monthly calendar showing approved/pending leaves
+- Color-coded leave types
+- Click on date to request new leave
+- Toggle between calendar and list view
+- For admins: show team leaves in calendar
+
+---
+
+### Phase 6: Frontend - Payroll Slip Download
+
+#### [MODIFY] [PayrollPage.jsx](file:///d:/Projects/Employee-Management-System/client/src/pages/payroll/PayrollPage.jsx)
+
+Employee-specific features:
+- List of personal payslips by month
+- Download PDF button for each slip
+- Year filter
+- Summary of YTD earnings
+
+#### [MODIFY] [payroll.routes.js](file:///d:/Projects/Employee-Management-System/server/routes/payroll.routes.js)
+
+Add endpoint:
+- `GET /api/payroll/:id/download` - Generate and download PDF payslip
+
+---
+
+### Phase 7: Frontend - Navigation & Routing
+
+#### [MODIFY] [App.jsx](file:///d:/Projects/Employee-Management-System/client/src/App.jsx)
+
+Update routes with new role restrictions:
+```jsx
+// Users - SuperAdmin only
+<Route path="users" element={
+    <ProtectedRoute roles={['superadmin']}>
+        <UserList />
+    </ProtectedRoute>
+} />
+
+// Employees - SuperAdmin, Admin, HR only (Employee sees only own profile)
+<Route path="employees" element={
+    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
+        <EmployeeList />
+    </ProtectedRoute>
+} />
+```
+
+---
+
+#### [MODIFY] [Sidebar.jsx](file:///d:/Projects/Employee-Management-System/client/src/components/layout/Sidebar.jsx)
+
+Update menu items with new role visibility:
+```javascript
+const menuItems = [
+    { path: '/dashboard', icon: FiHome, label: 'Dashboard' },
+    { path: '/users', icon: FiUserCheck, label: 'Users', roles: ['superadmin'] },
+    { path: '/employees', icon: FiUsers, label: 'Employees', roles: ['superadmin', 'admin', 'hr'] },
+    { path: '/departments', icon: FiLayers, label: 'Departments', roles: ['superadmin', 'admin', 'hr'] },
+    { path: '/attendance', icon: FiClock, label: 'Attendance' },
+    { path: '/leaves', icon: FiCalendar, label: 'Leaves' },
+    { path: '/payroll', icon: FiDollarSign, label: 'Payroll' },
+    { path: '/settings', icon: FiSettings, label: 'Settings' },
+];
+```
+
+---
+
+## Data Migration
+
+> [!IMPORTANT]
+> Existing users with role `'admin'` should be migrated to `'superadmin'` and role `'manager'` should be migrated to `'admin'` or removed.
 
 ---
 
 ## Verification Plan
 
-### Development Testing
-1. **Start Backend Server**: `cd server && npm run dev`
-   - Verify MongoDB connection
-   - Test API endpoints with Postman/Thunder Client
+### Manual Verification
 
-2. **Start Frontend**: `cd client && npm run dev`
-   - Verify React app loads at http://localhost:5173
-   - Test page navigation
+1. **SuperAdmin Tests:**
+   - Can access User Management page
+   - Can create, edit, delete users
+   - Can assign any role
+   - Full access to all pages
 
-### API Testing
-- Test authentication flow (register → login → protected routes)
-- Test CRUD operations for employees
-- Test attendance check-in/check-out
-- Test leave request workflow
-- Test payroll generation
+2. **Admin Tests:**
+   - Cannot see Users menu item
+   - Cannot access /users route (redirects)
+   - Can manage employees (add/edit/delete)
+   - Full dashboard access
 
-### UI Testing
-- Verify responsive design on mobile/tablet/desktop
-- Test dark/light theme toggle
-- Verify all forms have proper validation
-- Test navigation and routing
+3. **HR Tests:**
+   - Cannot delete employees (button hidden/disabled)
+   - Can add/edit employees
+   - Can manage departments
+   - Full dashboard access
 
-### Manual Testing by User
-1. Create admin account
-2. Add departments and positions
-3. Add employees
-4. Test attendance check-in/check-out
-5. Submit and approve leave requests
-6. Generate payroll and download payslip
-
----
-
-## User Review Required
-
-> [!IMPORTANT]
-> **MongoDB Setup**: You'll need MongoDB installed locally or a MongoDB Atlas connection string. Do you want me to:
-> 1. Use local MongoDB (requires installation)
-> 2. Setup for MongoDB Atlas (cloud - recommended)
-
-> [!NOTE]
-> **Estimated Development Time**: This is a comprehensive system with ~50+ files. I'll implement it in phases with working features at each step.
-
----
-
-## ต้องการให้ผมเริ่มพัฒนาระบบนี้เลยไหมครับ?
-
-หากต้องการปรับแต่งหรือเพิ่มเติมฟีเจอร์ใด กรุณาแจ้งได้เลยครับ
+4. **Employee Tests:**
+   - Only sees Dashboard, Attendance, Leaves, Payroll, Settings
+   - Dashboard shows personal info only
+   - Leaves page shows calendar view
+   - Payroll page shows own slips with download

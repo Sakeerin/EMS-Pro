@@ -3,15 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     FiHome, FiUsers, FiCalendar, FiClock, FiBriefcase,
     FiDollarSign, FiSettings, FiChevronLeft, FiLogOut,
-    FiLayers
+    FiLayers, FiUserCheck
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import './Sidebar.css';
 
 const menuItems = [
     { path: '/dashboard', icon: FiHome, label: 'Dashboard' },
-    { path: '/employees', icon: FiUsers, label: 'Employees' },
-    { path: '/departments', icon: FiLayers, label: 'Departments', roles: ['admin', 'hr', 'manager'] },
+    { path: '/users', icon: FiUserCheck, label: 'Users', roles: ['superadmin'] },
+    { path: '/employees', icon: FiUsers, label: 'Employees', roles: ['superadmin', 'admin', 'hr'] },
+    { path: '/departments', icon: FiLayers, label: 'Departments', roles: ['superadmin', 'admin', 'hr'] },
     { path: '/attendance', icon: FiClock, label: 'Attendance' },
     { path: '/leaves', icon: FiCalendar, label: 'Leaves' },
     { path: '/payroll', icon: FiDollarSign, label: 'Payroll' },
@@ -20,15 +21,15 @@ const menuItems = [
 
 const Sidebar = ({ collapsed, onToggle }) => {
     const location = useLocation();
-    const { user, logout, isAdmin, isHR, isManager } = useAuth();
+    const { user, logout, isSuperAdmin, isAdmin, isHR } = useAuth();
 
     const filteredMenuItems = menuItems.filter(item => {
         if (!item.roles) return true;
         return item.roles.some(role => {
+            if (role === 'superadmin') return isSuperAdmin;
             if (role === 'admin') return isAdmin;
             if (role === 'hr') return isHR;
-            if (role === 'manager') return isManager;
-            return false;
+            return user?.role === role;
         });
     });
 

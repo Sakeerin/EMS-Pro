@@ -16,6 +16,7 @@ import AttendancePage from './pages/attendance/AttendancePage';
 import LeavePage from './pages/leaves/LeavePage';
 import PayrollPage from './pages/payroll/PayrollPage';
 import Settings from './pages/settings/Settings';
+import UserList from './pages/users/UserList';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, roles }) => {
@@ -66,23 +67,34 @@ function App() {
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
 
+                {/* User Management - SuperAdmin only */}
+                <Route path="users" element={
+                    <ProtectedRoute roles={['superadmin']}>
+                        <UserList />
+                    </ProtectedRoute>
+                } />
+
                 {/* Employee Routes */}
-                <Route path="employees" element={<EmployeeList />} />
+                <Route path="employees" element={
+                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
+                        <EmployeeList />
+                    </ProtectedRoute>
+                } />
                 <Route path="employees/new" element={
-                    <ProtectedRoute roles={['admin', 'hr']}>
+                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
                         <EmployeeForm />
                     </ProtectedRoute>
                 } />
                 <Route path="employees/:id" element={<EmployeeDetail />} />
                 <Route path="employees/:id/edit" element={
-                    <ProtectedRoute roles={['admin', 'hr']}>
+                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
                         <EmployeeForm />
                     </ProtectedRoute>
                 } />
 
                 {/* Department Routes */}
                 <Route path="departments" element={
-                    <ProtectedRoute roles={['admin', 'hr', 'manager']}>
+                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
                         <DepartmentList />
                     </ProtectedRoute>
                 } />

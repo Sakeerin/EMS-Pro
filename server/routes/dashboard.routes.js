@@ -10,7 +10,7 @@ const router = express.Router();
 // @route   GET /api/dashboard/stats
 // @desc    Get dashboard statistics
 // @access  Private (Admin, HR)
-router.get('/stats', protect, authorize('admin', 'hr', 'manager'), async (req, res) => {
+router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         // Employee stats
         const totalEmployees = await Employee.countDocuments({ status: 'active' });
@@ -148,7 +148,7 @@ router.get('/stats', protect, authorize('admin', 'hr', 'manager'), async (req, r
 // @route   GET /api/dashboard/recent-activities
 // @desc    Get recent activities
 // @access  Private (Admin, HR)
-router.get('/recent-activities', protect, authorize('admin', 'hr', 'manager'), async (req, res) => {
+router.get('/recent-activities', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         // Recent employees
         const recentEmployees = await Employee.find()

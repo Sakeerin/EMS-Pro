@@ -56,9 +56,18 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
-    const isAdmin = user?.role === 'admin';
+    const isSuperAdmin = user?.role === 'superadmin';
+    const isAdmin = user?.role === 'admin' || isSuperAdmin;
     const isHR = user?.role === 'hr' || isAdmin;
-    const isManager = user?.role === 'manager' || isHR;
+    const isEmployee = user?.role === 'employee';
+
+    // Permission helpers
+    const canManageUsers = isSuperAdmin;
+    const canDeleteEmployee = isSuperAdmin || user?.role === 'admin';
+    const canEditEmployee = isHR;
+    const canManageDepartments = isHR;
+    const canApproveLeaves = isHR;
+    const canManagePayroll = isSuperAdmin || user?.role === 'admin';
 
     return (
         <AuthContext.Provider value={{
@@ -67,9 +76,16 @@ export const AuthProvider = ({ children }) => {
             login,
             register,
             logout,
+            isSuperAdmin,
             isAdmin,
             isHR,
-            isManager,
+            isEmployee,
+            canManageUsers,
+            canDeleteEmployee,
+            canEditEmployee,
+            canManageDepartments,
+            canApproveLeaves,
+            canManagePayroll,
             isAuthenticated: !!user
         }}>
             {children}

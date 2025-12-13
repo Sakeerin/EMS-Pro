@@ -5,6 +5,7 @@ import connectDB from './config/db.js';
 
 // Import Routes
 import authRoutes from './routes/auth.routes.js';
+import userRoutes from './routes/user.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
 import departmentRoutes from './routes/department.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
@@ -33,6 +34,7 @@ app.use('/uploads', express.static('uploads'));
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/attendance', attendanceRoutes);

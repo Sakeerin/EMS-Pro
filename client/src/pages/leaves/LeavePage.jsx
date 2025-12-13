@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import './Leave.css';
 
 const LeavePage = () => {
-    const { isHR, isManager, user } = useAuth();
+    const { isHR, canApproveLeaves, user } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [balance, setBalance] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -135,7 +135,7 @@ const LeavePage = () => {
             )}
 
             {/* Tabs */}
-            {(isHR || isManager) && (
+            {canApproveLeaves && (
                 <div className="tabs">
                     <button
                         className={`tab ${activeTab === 'my' ? 'active' : ''}`}

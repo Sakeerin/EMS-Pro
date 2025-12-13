@@ -213,7 +213,7 @@ router.get('/today', protect, async (req, res) => {
 // @route   GET /api/attendance/report
 // @desc    Get attendance report for all employees
 // @access  Private (Admin, HR, Manager)
-router.get('/report', protect, authorize('admin', 'hr', 'manager'), async (req, res) => {
+router.get('/report', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const { startDate, endDate, department } = req.query;
 

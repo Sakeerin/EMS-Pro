@@ -266,3 +266,82 @@
         width: 100%;
     }
 }
+
+/* Enhanced Form Styles */
+.input-with-button {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input-with-button .form-input {
+    flex: 1;
+}
+
+.form-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+}
+
+/* File Upload */
+.file-upload-wrapper {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.file-input {
+    display: none;
+}
+
+.file-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-size: 14px;
+}
+
+.file-upload-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Family Section */
+.family-member-section {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.subsection-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Emergency Contact Section */
+.form-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Warning text style */
+.text-warning {
+    color: var(--warning) !important;
+}

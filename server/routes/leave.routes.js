@@ -15,7 +15,7 @@ router.get('/', protect, async (req, res) => {
         let query = {};
 
         // If not admin/hr, only show own leaves
-        if (!['admin', 'hr', 'manager'].includes(req.user.role)) {
+        if (!['superadmin', 'admin', 'hr'].includes(req.user.role)) {
             if (req.user.employee) {
                 query.employee = req.user.employee;
             }
@@ -147,7 +147,7 @@ router.post('/', protect, async (req, res) => {
         const { type, startDate, endDate, reason, employeeId } = req.body;
 
         let employee;
-        if (employeeId && ['admin', 'hr'].includes(req.user.role)) {
+        if (employeeId && ['superadmin', 'admin', 'hr'].includes(req.user.role)) {
             employee = await Employee.findById(employeeId);
         } else if (req.user.employee) {
             employee = await Employee.findById(req.user.employee);
@@ -183,7 +183,7 @@ router.post('/', protect, async (req, res) => {
 // @route   PUT /api/leaves/:id/approve
 // @desc    Approve leave request
 // @access  Private (Admin, HR, Manager)
-router.put('/:id/approve', protect, authorize('admin', 'hr', 'manager'), async (req, res) => {
+router.put('/:id/approve', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const leave = await Leave.findById(req.params.id);
 
@@ -222,7 +222,7 @@ router.put('/:id/approve', protect, authorize('admin', 'hr', 'manager'), async (
 // @route   PUT /api/leaves/:id/reject
 // @desc    Reject leave request
 // @access  Private (Admin, HR, Manager)
-router.put('/:id/reject', protect, authorize('admin', 'hr', 'manager'), async (req, res) => {
+router.put('/:id/reject', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const { reason } = req.body;
         const leave = await Leave.findById(req.params.id);
@@ -283,7 +283,7 @@ router.delete('/:id', protect, async (req, res) => {
         }
 
         // Check ownership unless admin
-        if (req.user.role !== 'admin' && leave.employee.toString() !== req.user.employee?.toString()) {
+        if (!['superadmin', 'admin'].includes(req.user.role) && leave.employee.toString() !== req.user.employee?.toString()) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to cancel this leave'

@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['admin', 'hr', 'manager', 'employee'],
+        enum: ['superadmin', 'admin', 'hr', 'employee'],
         default: 'employee'
     },
     employee: {
@@ -31,6 +31,12 @@ const userSchema = new mongoose.Schema({
     },
     lastLogin: {
         type: Date
+    },
+    // Store the initial plain password for HR to share with new employees
+    // This should be cleared after the user changes their password
+    tempPassword: {
+        type: String,
+        default: null
     },
     resetPasswordToken: String,
     resetPasswordExpire: Date

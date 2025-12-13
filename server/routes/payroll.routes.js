@@ -9,7 +9,7 @@ const router = express.Router();
 // @route   GET /api/payroll
 // @desc    Get all payroll records
 // @access  Private (Admin, HR)
-router.get('/', protect, authorize('admin', 'hr'), async (req, res) => {
+router.get('/', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const { month, year, status } = req.query;
 
@@ -66,7 +66,7 @@ router.get('/my', protect, async (req, res) => {
 // @route   POST /api/payroll/generate
 // @desc    Generate payroll for a month
 // @access  Private (Admin, HR)
-router.post('/generate', protect, authorize('admin', 'hr'), async (req, res) => {
+router.post('/generate', protect, authorize('superadmin', 'admin'), async (req, res) => {
     try {
         const { month, year } = req.body;
 
@@ -173,7 +173,7 @@ router.get('/:id', protect, async (req, res) => {
 // @route   PUT /api/payroll/:id
 // @desc    Update payroll record
 // @access  Private (Admin, HR)
-router.put('/:id', protect, authorize('admin', 'hr'), async (req, res) => {
+router.put('/:id', protect, authorize('superadmin', 'admin'), async (req, res) => {
     try {
         const payroll = await Payroll.findByIdAndUpdate(
             req.params.id,
@@ -203,7 +203,7 @@ router.put('/:id', protect, authorize('admin', 'hr'), async (req, res) => {
 // @route   PUT /api/payroll/:id/approve
 // @desc    Approve payroll
 // @access  Private (Admin)
-router.put('/:id/approve', protect, authorize('admin'), async (req, res) => {
+router.put('/:id/approve', protect, authorize('superadmin', 'admin'), async (req, res) => {
     try {
         const payroll = await Payroll.findByIdAndUpdate(
             req.params.id,
@@ -234,7 +234,7 @@ router.put('/:id/approve', protect, authorize('admin'), async (req, res) => {
 // @route   PUT /api/payroll/:id/pay
 // @desc    Mark payroll as paid
 // @access  Private (Admin)
-router.put('/:id/pay', protect, authorize('admin'), async (req, res) => {
+router.put('/:id/pay', protect, authorize('superadmin', 'admin'), async (req, res) => {
     try {
         const payroll = await Payroll.findByIdAndUpdate(
             req.params.id,

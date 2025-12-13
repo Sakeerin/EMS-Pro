@@ -42,6 +42,11 @@ const employeeSchema = new mongoose.Schema({
         required: [true, 'Position is required'],
         trim: true
     },
+    employeeLevel: {
+        type: String,
+        enum: ['ceo', 'c-level', 'vp', 'avp', 'manager', 'assistant_manager', 'supervisor', 'officer'],
+        default: 'officer'
+    },
     manager: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee'
@@ -84,6 +89,38 @@ const employeeSchema = new mongoose.Schema({
         bankName: String,
         accountNumber: String,
         accountName: String
+    },
+    // Supervisor/Manager reference
+    supervisor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee'
+    },
+    // Job Description file
+    jobDescriptionFile: {
+        type: String,
+        default: ''
+    },
+    // Family Information
+    family: {
+        father: {
+            firstName: { type: String, default: '' },
+            lastName: { type: String, default: '' },
+            occupation: { type: String, default: '' },
+            phone: { type: String, default: '' }
+        },
+        mother: {
+            firstName: { type: String, default: '' },
+            lastName: { type: String, default: '' },
+            occupation: { type: String, default: '' },
+            phone: { type: String, default: '' }
+        },
+        spouse: {
+            firstName: { type: String, default: '' },
+            lastName: { type: String, default: '' },
+            occupation: { type: String, default: '' },
+            phone: { type: String, default: '' }
+        },
+        numberOfChildren: { type: Number, default: 0 }
     },
     leaveBalance: {
         annual: { type: Number, default: 12 },
