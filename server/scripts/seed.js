@@ -471,8 +471,7 @@ const seedDatabase = async () => {
         // Create superadmin user (system administrator - not linked to employee)
         await User.create({
             email: 'superadmin@company.com',
-            password: 'password123',
-            tempPassword: 'password123',
+            password: 'Password1',
             role: 'superadmin',
             isActive: true
         });
@@ -480,8 +479,7 @@ const seedDatabase = async () => {
         // Create admin user (linked to CEO)
         await User.create({
             email: 'admin@company.com',
-            password: 'password123',
-            tempPassword: 'password123',
+            password: 'Password1',
             role: 'admin',
             employee: ceo._id,
             isActive: true
@@ -490,8 +488,7 @@ const seedDatabase = async () => {
         // Create HR user (linked to HR Manager)
         await User.create({
             email: 'hr@company.com',
-            password: 'password123',
-            tempPassword: 'password123',
+            password: 'Password1',
             role: 'hr',
             employee: managerEmployees[6]._id,
             isActive: true
@@ -500,8 +497,7 @@ const seedDatabase = async () => {
         // Create sample employee user
         await User.create({
             email: 'dev1@company.com',
-            password: 'password123',
-            tempPassword: 'password123',
+            password: 'Password1',
             role: 'employee',
             employee: officerEmployees[0]._id,
             isActive: true
@@ -510,8 +506,7 @@ const seedDatabase = async () => {
         // Create manager user (uses 'employee' role as User model doesn't have 'manager')
         await User.create({
             email: 'manager.backend1@company.com',
-            password: 'password123',
-            tempPassword: 'password123',
+            password: 'Password1',
             role: 'employee',
             employee: managerEmployees[0]._id,
             isActive: true
@@ -540,11 +535,11 @@ const seedDatabase = async () => {
         console.log('');
         console.log('📋 Test Accounts:');
         console.log('─────────────────────────────────────────');
-        console.log('SuperAdmin: superadmin@company.com / password123');
-        console.log('Admin:      admin@company.com / password123');
-        console.log('HR:         hr@company.com / password123');
-        console.log('Manager:    manager.backend1@company.com / password123');
-        console.log('Employee:   dev1@company.com / password123');
+        console.log('SuperAdmin: superadmin@company.com / Password1');
+        console.log('Admin:      admin@company.com / Password1');
+        console.log('HR:         hr@company.com / Password1');
+        console.log('Manager:    manager.backend1@company.com / Password1');
+        console.log('Employee:   dev1@company.com / Password1');
         console.log('─────────────────────────────────────────');
 
         process.exit(0);

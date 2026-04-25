@@ -12,107 +12,149 @@ const router = express.Router();
 // @access  Private (Admin, HR)
 router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
-        // Employee stats
-        const totalEmployees = await Employee.countDocuments({ status: 'active' });
-        const newEmployeesThisMonth = await Employee.countDocuments({
-            status: 'active',
-            createdAt: { $gte: new Date(new Date().setDate(1)) }
-        });
-
-        // Today's attendance
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const todayAttendance = await Attendance.countDocuments({ date: today });
-        const presentToday = await Attendance.countDocuments({
-            date: today,
-            status: { $in: ['present', 'late'] }
-        });
-        const lateToday = await Attendance.countDocuments({ date: today, status: 'late' });
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+        const currentMonth = today.getMonth() + 1;
+        const currentYear = today.getFullYear();
 
-        // Pending leaves
-        const pendingLeaves = await Leave.countDocuments({ status: 'pending' });
+        // Calculate 7 days ago for attendance trend
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
-        // Department distribution
-        const departmentStats = await Employee.aggregate([
-            { $match: { status: 'active' } },
-            {
-                $group: {
-                    _id: '$department',
-                    count: { $sum: 1 }
+        // Run ALL independent queries in parallel using Promise.all
+        const [
+            totalEmployees,
+            newEmployeesThisMonth,
+            todayAttendance,
+            presentToday,
+            lateToday,
+            pendingLeaves,
+            departmentStats,
+            attendanceTrend,
+            leaveStats,
+            payrollSummary
+        ] = await Promise.all([
+            // 1. Total active employees
+            Employee.countDocuments({ status: 'active' }),
+
+            // 2. New employees this month
+            Employee.countDocuments({
+                status: 'active',
+                createdAt: { $gte: firstDayOfMonth }
+            }),
+
+            // 3. Today's total attendance
+            Attendance.countDocuments({ date: today }),
+
+            // 4. Present today (including late)
+            Attendance.countDocuments({
+                date: today,
+                status: { $in: ['present', 'late'] }
+            }),
+
+            // 5. Late today
+            Attendance.countDocuments({ date: today, status: 'late' }),
+
+            // 6. Pending leaves
+            Leave.countDocuments({ status: 'pending' }),
+
+            // 7. Department distribution (aggregation)
+            Employee.aggregate([
+                { $match: { status: 'active' } },
+                {
+                    $group: {
+                        _id: '$department',
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'departments',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'department'
+                    }
+                },
+                { $unwind: '$department' },
+                {
+                    $project: {
+                        name: '$department.name',
+                        count: 1
+                    }
+                },
+                { $sort: { count: -1 } }
+            ]),
+
+            // 8. Attendance trend (last 7 days) — SINGLE aggregation replaces 7 separate queries
+            Attendance.aggregate([
+                {
+                    $match: {
+                        date: { $gte: sevenDaysAgo },
+                        status: { $in: ['present', 'late'] }
+                    }
+                },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+                        present: { $sum: 1 }
+                    }
+                },
+                { $sort: { _id: 1 } },
+                {
+                    $project: {
+                        _id: 0,
+                        date: '$_id',
+                        present: 1
+                    }
                 }
-            },
-            {
-                $lookup: {
-                    from: 'departments',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'department'
+            ]),
+
+            // 9. Leave statistics (this year)
+            Leave.aggregate([
+                {
+                    $match: {
+                        startDate: { $gte: firstDayOfYear }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
                 }
-            },
-            { $unwind: '$department' },
-            {
-                $project: {
-                    name: '$department.name',
-                    count: 1
+            ]),
+
+            // 10. Payroll summary (current month)
+            Payroll.aggregate([
+                {
+                    $match: { month: currentMonth, year: currentYear }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalGross: { $sum: '$grossSalary' },
+                        totalNet: { $sum: '$netSalary' },
+                        count: { $sum: 1 }
+                    }
                 }
-            },
-            { $sort: { count: -1 } }
+            ])
         ]);
 
-        // Monthly attendance trend (last 7 days)
+        // Fill in missing dates for attendance trend (ensure all 7 days present)
+        const trendMap = new Map(attendanceTrend.map(d => [d.date, d.present]));
         const last7Days = [];
         for (let i = 6; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            date.setHours(0, 0, 0, 0);
-
-            const nextDate = new Date(date);
-            nextDate.setDate(nextDate.getDate() + 1);
-
-            const count = await Attendance.countDocuments({
-                date: { $gte: date, $lt: nextDate },
-                status: { $in: ['present', 'late'] }
-            });
-
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
             last7Days.push({
-                date: date.toISOString().split('T')[0],
-                present: count
+                date: dateStr,
+                present: trendMap.get(dateStr) || 0
             });
         }
-
-        // Leave statistics
-        const leaveStats = await Leave.aggregate([
-            {
-                $match: {
-                    startDate: { $gte: new Date(new Date().getFullYear(), 0, 1) }
-                }
-            },
-            {
-                $group: {
-                    _id: '$status',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        // Payroll summary (current month)
-        const currentMonth = new Date().getMonth() + 1;
-        const currentYear = new Date().getFullYear();
-
-        const payrollSummary = await Payroll.aggregate([
-            {
-                $match: { month: currentMonth, year: currentYear }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalGross: { $sum: '$grossSalary' },
-                    totalNet: { $sum: '$netSalary' },
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
 
         res.json({
             success: true,
@@ -140,7 +182,7 @@ router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to fetch dashboard statistics'
         });
     }
 });
@@ -150,24 +192,24 @@ router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req
 // @access  Private (Admin, HR)
 router.get('/recent-activities', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
-        // Recent employees
-        const recentEmployees = await Employee.find()
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .select('firstName lastName employeeId createdAt');
+        // Run all recent activity queries in parallel
+        const [recentEmployees, recentLeaves, recentAttendance] = await Promise.all([
+            Employee.find()
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select('firstName lastName employeeId createdAt'),
 
-        // Recent leaves
-        const recentLeaves = await Leave.find()
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .populate('employee', 'firstName lastName')
-            .select('type status startDate endDate createdAt');
+            Leave.find()
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .populate('employee', 'firstName lastName')
+                .select('type status startDate endDate createdAt'),
 
-        // Recent attendance
-        const recentAttendance = await Attendance.find()
-            .sort({ createdAt: -1 })
-            .limit(10)
-            .populate('employee', 'firstName lastName');
+            Attendance.find()
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .populate('employee', 'firstName lastName')
+        ]);
 
         res.json({
             success: true,
@@ -180,7 +222,7 @@ router.get('/recent-activities', protect, authorize('superadmin', 'admin', 'hr')
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to fetch recent activities'
         });
     }
 });

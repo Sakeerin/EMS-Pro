@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiBriefcase, FiMail, FiLock, FiEye, FiEyeOff, FiUser } from 'react-icons/fi';
+import { FiBriefcase, FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import './Auth.css';
@@ -12,8 +12,7 @@ const Register = () => {
     const [formData, setFormData] = useState({
         email: '',
         password: '',
-        confirmPassword: '',
-        role: 'employee'
+        confirmPassword: ''
     });
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -31,8 +30,13 @@ const Register = () => {
             return;
         }
 
-        if (formData.password.length < 6) {
-            toast.error('Password must be at least 6 characters');
+        if (formData.password.length < 8) {
+            toast.error('Password must be at least 8 characters');
+            return;
+        }
+
+        if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+            toast.error('Password must contain uppercase, lowercase and a number');
             return;
         }
 
@@ -41,8 +45,7 @@ const Register = () => {
         try {
             await register({
                 email: formData.email,
-                password: formData.password,
-                role: formData.role
+                password: formData.password
             });
             toast.success('Account created successfully!');
             navigate('/dashboard');
@@ -103,10 +106,11 @@ const Register = () => {
                             <input
                                 type={showPassword ? 'text' : 'password'}
                                 className="form-input"
-                                placeholder="Create a password"
+                                placeholder="Min 8 chars, uppercase, lowercase, number"
                                 value={formData.password}
                                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                 required
+                                minLength={8}
                             />
                             <button
                                 type="button"
@@ -130,23 +134,6 @@ const Register = () => {
                                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                                 required
                             />
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">Role</label>
-                        <div className="input-wrapper">
-                            <FiUser className="input-icon" />
-                            <select
-                                className="form-input form-select"
-                                value={formData.role}
-                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                            >
-                                <option value="employee">Employee</option>
-                                <option value="hr">HR</option>
-                                <option value="admin">Admin</option>
-                                <option value="superadmin">SuperAdmin</option>
-                            </select>
                         </div>
                     </div>
 

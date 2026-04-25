@@ -23,12 +23,10 @@ export const AuthProvider = ({ children }) => {
         const token = localStorage.getItem('token');
         if (token) {
             try {
-                api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 const { data } = await api.get('/auth/me');
                 setUser(data.data);
             } catch (error) {
                 localStorage.removeItem('token');
-                delete api.defaults.headers.common['Authorization'];
             }
         }
         setLoading(false);
@@ -37,7 +35,6 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         const { data } = await api.post('/auth/login', { email, password });
         localStorage.setItem('token', data.data.token);
-        api.defaults.headers.common['Authorization'] = `Bearer ${data.data.token}`;
         setUser(data.data);
         return data;
     };
@@ -45,14 +42,12 @@ export const AuthProvider = ({ children }) => {
     const register = async (userData) => {
         const { data } = await api.post('/auth/register', userData);
         localStorage.setItem('token', data.data.token);
-        api.defaults.headers.common['Authorization'] = `Bearer ${data.data.token}`;
         setUser(data.data);
         return data;
     };
 
     const logout = () => {
         localStorage.removeItem('token');
-        delete api.defaults.headers.common['Authorization'];
         setUser(null);
     };
 

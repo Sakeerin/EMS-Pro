@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { BUSINESS_RULES } from '../config/constants.js';
 
 const payrollSchema = new mongoose.Schema({
     employee: {
@@ -84,15 +85,25 @@ payrollSchema.index({ employee: 1, month: 1, year: 1 }, { unique: true });
 // Calculate totals before saving
 payrollSchema.pre('save', function (next) {
     // Calculate overtime amount
-    const hourlyRate = this.baseSalary / (22 * 8); // Assuming 22 working days, 8 hours per day
+    const monthlyDays = BUSINESS_RULES?.STANDARD_MONTHLY_WORKING_DAYS || 22;
+    const dailyHours = BUSINESS_RULES?.STANDARD_WORKING_HOURS || 8;
+    const hourlyRate = this.baseSalary / (monthlyDays * dailyHours);
     this.overtime.amount = this.overtime.hours * hourlyRate * this.overtime.rate;
 
-    // Calculate gross salary
-    const totalAllowances = Object.values(this.allowances).reduce((sum, val) => sum + (val || 0), 0);
+    // Calculate gross salary — explicitly sum known allowance fields
+    // (Object.values() on Mongoose subdocs may include internal properties)
+    const totalAllowances = (this.allowances.housing || 0) +
+        (this.allowances.transport || 0) +
+        (this.allowances.meal || 0) +
+        (this.allowances.other || 0);
     this.grossSalary = this.baseSalary + this.overtime.amount + totalAllowances + this.bonus;
 
-    // Calculate total deductions
-    this.totalDeductions = Object.values(this.deductions).reduce((sum, val) => sum + (val || 0), 0);
+    // Calculate total deductions — explicitly sum known deduction fields
+    this.totalDeductions = (this.deductions.tax || 0) +
+        (this.deductions.socialSecurity || 0) +
+        (this.deductions.providentFund || 0) +
+        (this.deductions.lateDeduction || 0) +
+        (this.deductions.other || 0);
 
     // Calculate net salary
     this.netSalary = this.grossSalary - this.totalDeductions;

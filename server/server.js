@@ -16,6 +16,21 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 // Load environment variables
 dotenv.config();
 
+// Validate required environment variables
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
+if (missingEnvVars.length > 0) {
+    console.error(`❌ Missing required environment variables: ${missingEnvVars.join(', ')}`);
+    console.error('   Please check your .env file. See .env.example for reference.');
+    process.exit(1);
+}
+
+// Warn if using placeholder JWT secret
+if (process.env.JWT_SECRET.includes('your-super-secret') || process.env.JWT_SECRET.length < 32) {
+    console.warn('⚠️  WARNING: JWT_SECRET appears to be a weak/placeholder value.');
+    console.warn('   Generate a strong secret with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+}
+
 // Connect to MongoDB
 connectDB();
 

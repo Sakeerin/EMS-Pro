@@ -52,12 +52,26 @@ const leaveSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Calculate days before saving
+// Calculate days before saving (Business Days only)
 leaveSchema.pre('save', function (next) {
     if (this.startDate && this.endDate) {
-        const diffTime = Math.abs(this.endDate - this.startDate);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        this.days = diffDays;
+        let businessDays = 0;
+        let currentDate = new Date(this.startDate);
+        currentDate.setHours(0, 0, 0, 0); // Normalize time
+        
+        const endDate = new Date(this.endDate);
+        endDate.setHours(0, 0, 0, 0); // Normalize time
+        
+        while (currentDate <= endDate) {
+            const dayOfWeek = currentDate.getDay();
+            // Count if not Saturday (6) and not Sunday (0)
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                businessDays++;
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        this.days = businessDays;
     }
     next();
 });

@@ -1,0 +1,13 @@
+export const BUSINESS_RULES = {
+    // Attendance Rules
+    STANDARD_WORKING_HOURS: 8,
+    LATE_THRESHOLD_HOUR: 9, // 9:00 AM
+    LATE_THRESHOLD_MINUTE: 0,
+    
+    // Payroll Rules
+    STANDARD_MONTHLY_WORKING_DAYS: 22,
+    OVERTIME_MULTIPLIER: 1.5,
+    SOCIAL_SECURITY_RATE: 0.05, // 5%
+    SOCIAL_SECURITY_CAP: 750, // 750 Baht maximum
+    LATE_DEDUCTION_PENALTY: 100 // 100 Baht per late day
+};

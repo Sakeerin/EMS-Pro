@@ -1,10 +1,26 @@
 import express from 'express';
+import mongoose from 'mongoose';
+import crypto from 'crypto';
+import { body, param, validationResult } from 'express-validator';
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
 import { protect, authorize } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+
+// Validation middleware helper
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            success: false,
+            message: 'Validation failed',
+            errors: errors.array().map(e => ({ field: e.path, message: e.msg }))
+        });
+    }
+    next();
+};
 
 const router = express.Router();
 
@@ -246,6 +262,63 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/stats/overview
+// @desc    Get employee statistics
+// @access  Private
+// NOTE: This route MUST be defined BEFORE /:id to prevent 'stats' being treated as an ID
+router.get('/stats/overview', protect, async (req, res) => {
+    try {
+        const [stats, departmentStats] = await Promise.all([
+            Employee.aggregate([
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]),
+            Employee.aggregate([
+                {
+                    $group: {
+                        _id: '$department',
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'departments',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'department'
+                    }
+                },
+                {
+                    $unwind: '$department'
+                },
+                {
+                    $project: {
+                        name: '$department.name',
+                        count: 1
+                    }
+                }
+            ])
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                statusStats: stats,
+                departmentStats
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch employee statistics'
+        });
+    }
+});
+
 // @route   GET /api/employees/:id
 // @desc    Get employee by ID
 // @access  Private
@@ -277,81 +350,131 @@ router.get('/:id', protect, async (req, res) => {
 // @route   POST /api/employees
 // @desc    Create new employee
 // @access  Private (Admin, HR)
-router.post('/', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
-    try {
-        const employee = await Employee.create(req.body);
+router.post('/',
+    protect,
+    authorize('superadmin', 'admin', 'hr'),
+    [
+        body('employeeId').notEmpty().withMessage('Employee ID is required').trim(),
+        body('firstName').notEmpty().withMessage('First name is required').trim().escape(),
+        body('lastName').notEmpty().withMessage('Last name is required').trim().escape(),
+        body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+        body('department').isMongoId().withMessage('Valid department is required'),
+        body('position').notEmpty().withMessage('Position is required').trim(),
+        body('hireDate').optional().isISO8601().withMessage('Invalid hire date'),
+        body('salary').isFloat({ min: 0 }).withMessage('Salary must be a positive number'),
+    ],
+    validate,
+    async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+        try {
+            const employee = new Employee(req.body);
+            await employee.save({ session });
 
-        // Generate random password (10 characters, alphanumeric)
-        const generateRandomPassword = () => {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            let password = '';
-            for (let i = 0; i < 10; i++) {
-                password += chars.charAt(Math.floor(Math.random() * chars.length));
+            // Generate cryptographically secure random password
+            // Format: 4 random bytes hex + 'A' + '1' = ensures uppercase + number requirement
+            const randomPassword = crypto.randomBytes(4).toString('hex') + 'A1';
+
+            // Create user account — password will be hashed by User model pre-save hook
+            // mustChangePassword forces the user to set their own password on first login
+            const user = new User({
+                email: req.body.email,
+                password: randomPassword,
+                role: 'employee',
+                employee: employee._id,
+                isActive: true,
+                mustChangePassword: true
+            });
+            await user.save({ session });
+
+            await session.commitTransaction();
+            session.endSession();
+
+            res.status(201).json({
+                success: true,
+                data: employee,
+                userCreated: true,
+                message: `Employee created. User account created with email: ${req.body.email}. User must change password on first login.`
+            });
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            
+            // If user creation fails, we should still report success for employee
+            // but note the user creation issue
+            if (error.code === 11000) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'An account with this email already exists'
+                });
             }
-            return password;
-        };
-
-        // Always create user account for new employee
-        const randomPassword = generateRandomPassword();
-        const user = await User.create({
-            email: req.body.email,
-            password: randomPassword,
-            tempPassword: randomPassword, // Store plain password for HR to view
-            role: 'employee',
-            employee: employee._id,
-            isActive: true
-        });
-
-        res.status(201).json({
-            success: true,
-            data: employee,
-            userCreated: true,
-            message: `Employee created. User account created with email: ${req.body.email}`
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create employee'
+            });
+        }
     }
-});
+);
 
 // @route   PUT /api/employees/:id
 // @desc    Update employee
 // @access  Private (Admin, HR)
-router.put('/:id', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
-    try {
-        const employee = await Employee.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        ).populate('department', 'name code');
+router.put('/:id',
+    protect,
+    authorize('superadmin', 'admin', 'hr'),
+    [
+        param('id').isMongoId().withMessage('Invalid employee ID'),
+        body('email').optional().isEmail().withMessage('Valid email is required').normalizeEmail(),
+        body('salary').optional().isFloat({ min: 0 }).withMessage('Salary must be a positive number'),
+        body('department').optional().isMongoId().withMessage('Invalid department ID'),
+    ],
+    validate,
+    async (req, res) => {
+        try {
+            const employeeToUpdate = await Employee.findById(req.params.id);
+            if (!employeeToUpdate) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Employee not found'
+                });
+            }
+            
+            const emailChanged = req.body.email && req.body.email !== employeeToUpdate.email;
 
-        if (!employee) {
-            return res.status(404).json({
+            const employee = await Employee.findByIdAndUpdate(
+                req.params.id,
+                req.body,
+                { new: true, runValidators: true }
+            ).populate('department', 'name code');
+
+            // Sync email to user account if changed
+            if (emailChanged) {
+                await User.findOneAndUpdate(
+                    { employee: employee._id },
+                    { email: req.body.email }
+                );
+            }
+
+            res.json({
+                success: true,
+                data: employee
+            });
+        } catch (error) {
+            res.status(500).json({
                 success: false,
-                message: 'Employee not found'
+                message: 'Failed to update employee'
             });
         }
-
-        res.json({
-            success: true,
-            data: employee
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
     }
-});
+);
 
 // @route   DELETE /api/employees/:id
-// @desc    Delete employee
+// @desc    Delete employee (with cascade cleanup)
 // @access  Private (Admin)
 router.delete('/:id', protect, authorize('superadmin', 'admin'), async (req, res) => {
     try {
-        const employee = await Employee.findByIdAndDelete(req.params.id);
+        const employeeId = req.params.id;
+        const employee = await Employee.findById(employeeId);
 
         if (!employee) {
             return res.status(404).json({
@@ -360,17 +483,49 @@ router.delete('/:id', protect, authorize('superadmin', 'admin'), async (req, res
             });
         }
 
-        // Also delete associated user account
-        await User.findOneAndDelete({ employee: req.params.id });
+        // Import models dynamically to avoid circular deps at module level
+        const Attendance = (await import('../models/Attendance.js')).default;
+        const Leave = (await import('../models/Leave.js')).default;
+        const Payroll = (await import('../models/Payroll.js')).default;
+        const Department = (await import('../models/Department.js')).default;
+
+        // Cascade cleanup: remove all related records in parallel
+        await Promise.all([
+            // Delete the employee
+            Employee.findByIdAndDelete(employeeId),
+            // Delete associated user account
+            User.findOneAndDelete({ employee: employeeId }),
+            // Delete attendance records
+            Attendance.deleteMany({ employee: employeeId }),
+            // Delete leave records
+            Leave.deleteMany({ employee: employeeId }),
+            // Delete payroll records
+            Payroll.deleteMany({ employee: employeeId }),
+            // Clear manager references on other employees
+            Employee.updateMany(
+                { manager: employeeId },
+                { $unset: { manager: '' } }
+            ),
+            // Clear supervisor references on other employees
+            Employee.updateMany(
+                { supervisor: employeeId },
+                { $unset: { supervisor: '' } }
+            ),
+            // Clear department manager references
+            Department.updateMany(
+                { manager: employeeId },
+                { $unset: { manager: '' } }
+            ),
+        ]);
 
         res.json({
             success: true,
-            message: 'Employee deleted successfully'
+            message: 'Employee and all related records deleted successfully'
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to delete employee'
         });
     }
 });
@@ -405,145 +560,8 @@ router.post('/:id/avatar', protect, uploadAvatar.single('avatar'), async (req, r
     }
 });
 
-// @route   GET /api/employees/stats/overview
-// @desc    Get employee statistics
-// @access  Private
-router.get('/stats/overview', protect, async (req, res) => {
-    try {
-        const stats = await Employee.aggregate([
-            {
-                $group: {
-                    _id: '$status',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        const departmentStats = await Employee.aggregate([
-            {
-                $group: {
-                    _id: '$department',
-                    count: { $sum: 1 }
-                }
-            },
-            {
-                $lookup: {
-                    from: 'departments',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'department'
-                }
-            },
-            {
-                $unwind: '$department'
-            },
-            {
-                $project: {
-                    name: '$department.name',
-                    count: 1
-                }
-            }
-        ]);
-
-        res.json({
-            success: true,
-            data: {
-                statusStats: stats,
-                departmentStats
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-});
-
-// @route   GET /api/employees/supervisors
-// @desc    Get list of employees who can be heads/managers based on level hierarchy and department
-// @access  Private (Admin, HR)
-router.get('/supervisors', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
-    try {
-        const { level, department } = req.query;
-
-        // Define level hierarchy for filtering heads
-        // Hierarchy order: officer < supervisor < assistant_manager < manager < avp < vp < c-level < ceo
-        // Each level can report to any level above it
-        const levelHierarchy = {
-            'officer': ['supervisor', 'assistant_manager', 'manager', 'avp', 'vp', 'c-level', 'ceo'],
-            'supervisor': ['assistant_manager', 'manager', 'avp', 'vp', 'c-level', 'ceo'],
-            'assistant_manager': ['manager', 'avp', 'vp', 'c-level', 'ceo'],
-            'manager': ['avp', 'vp', 'c-level', 'ceo'],
-            'avp': ['vp', 'c-level', 'ceo'],
-            'vp': ['c-level', 'ceo'],
-            'c-level': ['ceo'],
-            'ceo': []
-        };
-
-        // If no level specified or CEO level, return empty
-        if (!level || level === 'ceo' || !levelHierarchy[level]) {
-            return res.json({ success: true, data: [] });
-        }
-
-        const validHeadLevels = levelHierarchy[level];
-
-        // Strategy: Try to find managers in the same department first, prioritizing by level
-        // If department is specified, first look for same-department managers
-        // If none found in same department, include managers from all departments
-
-        let supervisors = [];
-
-        if (department && validHeadLevels.length > 0) {
-            // First, try to find supervisors in the same department at each level (lowest first)
-            for (const targetLevel of validHeadLevels) {
-                const sameDeptSupervisors = await Employee.find({
-                    status: 'active',
-                    department: department,
-                    employeeLevel: targetLevel
-                })
-                    .select('_id firstName lastName employeeId position employeeLevel department')
-                    .populate('department', 'name')
-                    .sort({ firstName: 1 });
-
-                if (sameDeptSupervisors.length > 0) {
-                    supervisors = sameDeptSupervisors;
-                    break; // Found managers at this level, stop looking
-                }
-            }
-
-            // If no same-department supervisors found, find any supervisor at valid levels
-            if (supervisors.length === 0) {
-                supervisors = await Employee.find({
-                    status: 'active',
-                    employeeLevel: { $in: validHeadLevels }
-                })
-                    .select('_id firstName lastName employeeId position employeeLevel department')
-                    .populate('department', 'name')
-                    .sort({ employeeLevel: 1, firstName: 1 });
-            }
-        } else {
-            // No department specified, return all valid supervisors
-            supervisors = await Employee.find({
-                status: 'active',
-                employeeLevel: { $in: validHeadLevels }
-            })
-                .select('_id firstName lastName employeeId position employeeLevel department')
-                .populate('department', 'name')
-                .sort({ employeeLevel: 1, firstName: 1 });
-        }
-
-        res.json({
-            success: true,
-            data: supervisors
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-});
+// NOTE: /stats/overview route was moved above /:id to fix route ordering.
+// NOTE: Duplicate /supervisors route was removed. The primary definition is at line ~131.
 
 // @route   POST /api/employees/:id/upload-jd
 // @desc    Upload Job Description file

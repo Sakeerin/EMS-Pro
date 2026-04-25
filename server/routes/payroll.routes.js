@@ -1,8 +1,23 @@
 import express from 'express';
+import { body, param, validationResult } from 'express-validator';
+import { BUSINESS_RULES } from '../config/constants.js';
 import Payroll from '../models/Payroll.js';
 import Employee from '../models/Employee.js';
 import Attendance from '../models/Attendance.js';
 import { protect, authorize } from '../middleware/auth.js';
+
+// Validation middleware helper
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            success: false,
+            message: 'Validation failed',
+            errors: errors.array().map(e => ({ field: e.path, message: e.msg }))
+        });
+    }
+    next();
+};
 
 const router = express.Router();
 
@@ -66,39 +81,70 @@ router.get('/my', protect, async (req, res) => {
 // @route   POST /api/payroll/generate
 // @desc    Generate payroll for a month
 // @access  Private (Admin, HR)
-router.post('/generate', protect, authorize('superadmin', 'admin'), async (req, res) => {
+router.post('/generate',
+    protect,
+    authorize('superadmin', 'admin'),
+    [
+        body('month')
+            .isInt({ min: 1, max: 12 }).withMessage('Month must be between 1 and 12'),
+        body('year')
+            .isInt({ min: 2000, max: 2100 }).withMessage('Invalid year'),
+    ],
+    validate,
+    async (req, res) => {
     try {
         const { month, year } = req.body;
 
         // Get all active employees
         const employees = await Employee.find({ status: 'active' });
+        const employeeIds = employees.map(e => e._id);
 
+        // BATCH: Get all existing payrolls for this month/year in one query
+        const existingPayrolls = await Payroll.find({
+            employee: { $in: employeeIds },
+            month,
+            year
+        }).select('employee');
+        const existingEmployeeIds = new Set(existingPayrolls.map(p => p.employee.toString()));
+
+        // Filter out employees who already have payroll
+        const employeesToProcess = employees.filter(e => !existingEmployeeIds.has(e._id.toString()));
+
+        if (employeesToProcess.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Payroll already generated for all employees this month',
+                data: []
+            });
+        }
+
+        // BATCH: Get all attendance records for the month in one query
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+
+        const allAttendance = await Attendance.find({
+            employee: { $in: employeesToProcess.map(e => e._id) },
+            date: { $gte: startDate, $lte: endDate }
+        });
+
+        // Group attendance by employee ID for fast lookup
+        const attendanceByEmployee = new Map();
+        allAttendance.forEach(record => {
+            const empId = record.employee.toString();
+            if (!attendanceByEmployee.has(empId)) {
+                attendanceByEmployee.set(empId, []);
+            }
+            attendanceByEmployee.get(empId).push(record);
+        });
+
+        // Build payroll records — use Payroll.create() per record so pre-save hooks run
         const payrollRecords = [];
+        for (const employee of employeesToProcess) {
+            const empAttendance = attendanceByEmployee.get(employee._id.toString()) || [];
+            const workingDays = empAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+            const overtimeHours = empAttendance.reduce((sum, a) => sum + (a.overtime || 0), 0);
+            const lateDays = empAttendance.filter(a => a.status === 'late').length;
 
-        for (const employee of employees) {
-            // Check if payroll already exists
-            const existingPayroll = await Payroll.findOne({
-                employee: employee._id,
-                month,
-                year
-            });
-
-            if (existingPayroll) continue;
-
-            // Calculate attendance for the month
-            const startDate = new Date(year, month - 1, 1);
-            const endDate = new Date(year, month, 0);
-
-            const attendanceRecords = await Attendance.find({
-                employee: employee._id,
-                date: { $gte: startDate, $lte: endDate }
-            });
-
-            const workingDays = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
-            const overtimeHours = attendanceRecords.reduce((sum, a) => sum + (a.overtime || 0), 0);
-            const lateDays = attendanceRecords.filter(a => a.status === 'late').length;
-
-            // Calculate payroll
             const payroll = await Payroll.create({
                 employee: employee._id,
                 month,
@@ -107,11 +153,11 @@ router.post('/generate', protect, authorize('superadmin', 'admin'), async (req, 
                 workingDays,
                 overtime: {
                     hours: overtimeHours,
-                    rate: 1.5
+                    rate: BUSINESS_RULES.OVERTIME_MULTIPLIER
                 },
                 deductions: {
-                    socialSecurity: Math.min(employee.salary * 0.05, 750), // 5% max 750
-                    lateDeduction: lateDays * 100 // 100 baht per late day
+                    socialSecurity: Math.min(employee.salary * BUSINESS_RULES.SOCIAL_SECURITY_RATE, BUSINESS_RULES.SOCIAL_SECURITY_CAP),
+                    lateDeduction: lateDays * BUSINESS_RULES.LATE_DEDUCTION_PENALTY
                 }
             });
 
@@ -126,7 +172,7 @@ router.post('/generate', protect, authorize('superadmin', 'admin'), async (req, 
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to generate payroll'
         });
     }
 });

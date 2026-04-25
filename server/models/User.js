@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// Password validation regex: min 8 chars, at least 1 uppercase, 1 lowercase, 1 number
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
 const userSchema = new mongoose.Schema({
     email: {
         type: String,
@@ -8,12 +11,12 @@ const userSchema = new mongoose.Schema({
         unique: true,
         lowercase: true,
         trim: true,
-        match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
+        match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Please enter a valid email']
     },
     password: {
         type: String,
         required: [true, 'Password is required'],
-        minlength: [6, 'Password must be at least 6 characters'],
+        minlength: [8, 'Password must be at least 8 characters'],
         select: false
     },
     role: {
@@ -32,17 +35,30 @@ const userSchema = new mongoose.Schema({
     lastLogin: {
         type: Date
     },
-    // Store the initial plain password for HR to share with new employees
-    // This should be cleared after the user changes their password
-    tempPassword: {
-        type: String,
-        default: null
+    // Flag to force password change on first login (for auto-created accounts)
+    mustChangePassword: {
+        type: Boolean,
+        default: false
     },
     resetPasswordToken: String,
     resetPasswordExpire: Date
 }, {
     timestamps: true
 });
+
+// Static method to validate password strength
+userSchema.statics.validatePasswordStrength = function (password) {
+    if (!password || password.length < 8) {
+        return { valid: false, message: 'Password must be at least 8 characters' };
+    }
+    if (!passwordRegex.test(password)) {
+        return {
+            valid: false,
+            message: 'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
+        };
+    }
+    return { valid: true };
+};
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {

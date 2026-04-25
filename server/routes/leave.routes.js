@@ -1,7 +1,21 @@
 import express from 'express';
+import { body, param, validationResult } from 'express-validator';
 import Leave from '../models/Leave.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize } from '../middleware/auth.js';
+
+// Validation middleware helper
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            success: false,
+            message: 'Validation failed',
+            errors: errors.array().map(e => ({ field: e.path, message: e.msg }))
+        });
+    }
+    next();
+};
 
 const router = express.Router();
 
@@ -142,43 +156,125 @@ router.get('/balance', protect, async (req, res) => {
 // @route   POST /api/leaves
 // @desc    Create leave request
 // @access  Private
-router.post('/', protect, async (req, res) => {
-    try {
-        const { type, startDate, endDate, reason, employeeId } = req.body;
+router.post('/',
+    protect,
+    [
+        body('type')
+            .isIn(['annual', 'sick', 'personal', 'maternity', 'paternity', 'unpaid', 'other'])
+            .withMessage('Invalid leave type'),
+        body('startDate')
+            .isISO8601().withMessage('Valid start date is required'),
+        body('endDate')
+            .isISO8601().withMessage('Valid end date is required'),
+        body('reason')
+            .notEmpty().withMessage('Reason is required')
+            .trim(),
+        body('employeeId')
+            .optional()
+            .isMongoId().withMessage('Invalid employee ID'),
+    ],
+    validate,
+    async (req, res) => {
+        try {
+            const { type, startDate, endDate, reason, employeeId } = req.body;
 
-        let employee;
-        if (employeeId && ['superadmin', 'admin', 'hr'].includes(req.user.role)) {
-            employee = await Employee.findById(employeeId);
-        } else if (req.user.employee) {
-            employee = await Employee.findById(req.user.employee);
-        }
+            // Validate date order
+            if (new Date(startDate) > new Date(endDate)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Start date must be before or equal to end date'
+                });
+            }
 
-        if (!employee) {
-            return res.status(404).json({
+            let employee;
+            if (employeeId && ['superadmin', 'admin', 'hr'].includes(req.user.role)) {
+                employee = await Employee.findById(employeeId);
+            } else if (req.user.employee) {
+                employee = await Employee.findById(req.user.employee);
+            }
+
+            if (!employee) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Employee not found'
+                });
+            }
+
+            // Calculate business days
+            let businessDays = 0;
+            let currentDate = new Date(startDate);
+            currentDate.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(0, 0, 0, 0);
+            
+            while (currentDate <= end) {
+                const dayOfWeek = currentDate.getDay();
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    businessDays++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            if (businessDays === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Leave duration must include at least one business day'
+                });
+            }
+
+            // Check balance for constrained leave types
+            if (['annual', 'sick', 'personal'].includes(type)) {
+                const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+                const endOfYear = new Date(new Date().getFullYear(), 11, 31);
+
+                const usedLeaves = await Leave.aggregate([
+                    {
+                        $match: {
+                            employee: employee._id,
+                            status: { $in: ['approved', 'pending'] }, // include pending to prevent overdraft
+                            startDate: { $gte: startOfYear, $lte: endOfYear },
+                            type: type
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: null,
+                            totalDays: { $sum: '$days' }
+                        }
+                    }
+                ]);
+
+                const usedDays = usedLeaves.length > 0 ? usedLeaves[0].totalDays : 0;
+                const totalBalance = employee.leaveBalance ? employee.leaveBalance[type] : 0;
+
+                if (usedDays + businessDays > totalBalance) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient ${type} leave balance. You have ${totalBalance - usedDays} days remaining.`
+                    });
+                }
+            }
+
+            const leave = await Leave.create({
+                employee: employee._id,
+                type,
+                startDate: new Date(startDate),
+                endDate: new Date(endDate),
+                reason
+            });
+
+            res.status(201).json({
+                success: true,
+                data: leave
+            });
+        } catch (error) {
+            res.status(500).json({
                 success: false,
-                message: 'Employee not found'
+                message: 'Failed to create leave request'
             });
         }
-
-        const leave = await Leave.create({
-            employee: employee._id,
-            type,
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
-            reason
-        });
-
-        res.status(201).json({
-            success: true,
-            data: leave
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
     }
-});
+);
 
 // @route   PUT /api/leaves/:id/approve
 // @desc    Approve leave request

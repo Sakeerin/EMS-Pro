@@ -1,5 +1,6 @@
 import express from 'express';
 import Attendance from '../models/Attendance.js';
+import { BUSINESS_RULES } from '../config/constants.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -46,10 +47,14 @@ router.post('/check-in', protect, async (req, res) => {
         const now = new Date();
         const checkInTime = now;
 
-        // Determine status (late if after 9:00 AM)
-        const nineAM = new Date(today);
-        nineAM.setHours(9, 0, 0, 0);
-        const status = now > nineAM ? 'late' : 'present';
+        // Determine status (late if after threshold)
+        const threshold = new Date(today);
+        threshold.setHours(
+            BUSINESS_RULES?.LATE_THRESHOLD_HOUR || 9,
+            BUSINESS_RULES?.LATE_THRESHOLD_MINUTE || 0,
+            0, 0
+        );
+        const status = now > threshold ? 'late' : 'present';
 
         if (attendance) {
             attendance.checkIn = { time: checkInTime, location, note };
@@ -185,16 +190,27 @@ router.get('/my', protect, async (req, res) => {
 // @access  Private
 router.get('/today', protect, async (req, res) => {
     try {
-        let employee;
-        if (req.user.employee) {
-            employee = await Employee.findById(req.user.employee);
+        // If user has no employee profile, return default (e.g., SuperAdmin without employee link)
+        if (!req.user.employee) {
+            return res.json({
+                success: true,
+                data: { checkedIn: false, checkedOut: false, noEmployeeProfile: true }
+            });
+        }
+
+        const employee = await Employee.findById(req.user.employee);
+        if (!employee) {
+            return res.json({
+                success: true,
+                data: { checkedIn: false, checkedOut: false, noEmployeeProfile: true }
+            });
         }
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         const attendance = await Attendance.findOne({
-            employee: employee?._id,
+            employee: employee._id,
             date: today
         });
 
@@ -205,7 +221,7 @@ router.get('/today', protect, async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to fetch today\'s attendance'
         });
     }
 });
@@ -215,7 +231,10 @@ router.get('/today', protect, async (req, res) => {
 // @access  Private (Admin, HR, Manager)
 router.get('/report', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
-        const { startDate, endDate, department } = req.query;
+        const { startDate, endDate, department, page = 1, limit = 50 } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = Math.min(parseInt(limit) || 50, 200); // Cap at 200
+        const skip = (pageNum - 1) * limitNum;
 
         let employeeQuery = {};
         if (department) {
@@ -234,32 +253,42 @@ router.get('/report', protect, authorize('superadmin', 'admin', 'hr'), async (re
             };
         }
 
-        const attendance = await Attendance.find(attendanceQuery)
-            .populate('employee', 'firstName lastName employeeId department')
-            .sort({ date: -1 });
-
-        // Calculate summary
-        const summary = await Attendance.aggregate([
-            { $match: attendanceQuery },
-            {
-                $group: {
-                    _id: '$status',
-                    count: { $sum: 1 }
+        // Run count, records, and summary in parallel
+        const [total, attendance, summary] = await Promise.all([
+            Attendance.countDocuments(attendanceQuery),
+            Attendance.find(attendanceQuery)
+                .populate('employee', 'firstName lastName employeeId department')
+                .sort({ date: -1 })
+                .skip(skip)
+                .limit(limitNum),
+            Attendance.aggregate([
+                { $match: attendanceQuery },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
                 }
-            }
+            ])
         ]);
 
         res.json({
             success: true,
             data: {
                 records: attendance,
-                summary
+                summary,
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total,
+                    pages: Math.ceil(total / limitNum)
+                }
             }
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to generate attendance report'
         });
     }
 });

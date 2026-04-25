@@ -1,6 +1,20 @@
 import express from 'express';
+import { body, param, validationResult } from 'express-validator';
 import Department from '../models/Department.js';
 import { protect, authorize } from '../middleware/auth.js';
+
+// Validation middleware helper
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            success: false,
+            message: 'Validation failed',
+            errors: errors.array().map(e => ({ field: e.path, message: e.msg }))
+        });
+    }
+    next();
+};
 
 const router = express.Router();
 
@@ -56,21 +70,38 @@ router.get('/:id', protect, async (req, res) => {
 // @route   POST /api/departments
 // @desc    Create new department
 // @access  Private (Admin)
-router.post('/', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
-    try {
-        const department = await Department.create(req.body);
+router.post('/',
+    protect,
+    authorize('superadmin', 'admin', 'hr'),
+    [
+        body('name').notEmpty().withMessage('Department name is required').trim(),
+        body('code').notEmpty().withMessage('Department code is required').trim(),
+        body('manager').optional().isMongoId().withMessage('Invalid manager ID'),
+        body('budget').optional().isFloat({ min: 0 }).withMessage('Budget must be a positive number'),
+    ],
+    validate,
+    async (req, res) => {
+        try {
+            const department = await Department.create(req.body);
 
-        res.status(201).json({
-            success: true,
-            data: department
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+            res.status(201).json({
+                success: true,
+                data: department
+            });
+        } catch (error) {
+            if (error.code === 11000) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Department name or code already exists'
+                });
+            }
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create department'
+            });
+        }
     }
-});
+);
 
 // @route   PUT /api/departments/:id
 // @desc    Update department

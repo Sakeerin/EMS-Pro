@@ -6,7 +6,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 
 ### 🔐 Authentication & Authorization
 - JWT-based authentication
-- Role-based access control (Admin, HR, Manager, Employee)
+- Role-based access control (SuperAdmin, Admin, HR, Employee)
 - Secure password hashing with bcrypt
 
 ### 👥 Employee Management

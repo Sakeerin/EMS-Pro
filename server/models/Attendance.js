@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { BUSINESS_RULES } from '../config/constants.js';
 
 const attendanceSchema = new mongoose.Schema({
     employee: {
@@ -58,12 +59,32 @@ attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
 attendanceSchema.pre('save', function (next) {
     if (this.checkIn?.time && this.checkOut?.time) {
         const diffMs = this.checkOut.time - this.checkIn.time;
-        const hours = diffMs / (1000 * 60 * 60);
+        let hours = diffMs / (1000 * 60 * 60);
+
+        // Deduct break times
+        if (this.breaks && this.breaks.length > 0) {
+            const totalBreakMs = this.breaks.reduce((total, b) => {
+                if (b.duration) {
+                    return total + (b.duration * 60 * 1000); // Assume duration is in minutes
+                }
+                if (b.startTime && b.endTime) {
+                    return total + (b.endTime - b.startTime);
+                }
+                return total;
+            }, 0);
+            
+            const breakHours = totalBreakMs / (1000 * 60 * 60);
+            hours = Math.max(0, hours - breakHours); // Ensure working hours don't go negative
+        }
+
         this.workingHours = Math.round(hours * 100) / 100;
 
-        // Calculate overtime (assuming 8 hours is standard)
-        if (hours > 8) {
-            this.overtime = Math.round((hours - 8) * 100) / 100;
+        // Calculate overtime using standard working hours from BUSINESS_RULES
+        const standardHours = BUSINESS_RULES?.STANDARD_WORKING_HOURS || 8;
+        if (hours > standardHours) {
+            this.overtime = Math.round((hours - standardHours) * 100) / 100;
+        } else {
+            this.overtime = 0;
         }
     }
     next();
