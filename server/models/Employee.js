@@ -126,6 +126,11 @@ const employeeSchema = new mongoose.Schema({
         annual: { type: Number, default: 12 },
         sick: { type: Number, default: 30 },
         personal: { type: Number, default: 5 }
+    },
+    // Versioning for concurrent leave requests
+    leaveRequestVersion: {
+        type: Number,
+        default: 0
     }
 }, {
     timestamps: true,

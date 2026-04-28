@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
     FiUsers, FiUserCheck, FiUserX, FiClock, FiCalendar,
@@ -14,28 +14,24 @@ import './Dashboard.css';
 
 const Dashboard = () => {
     const { user, isHR } = useAuth();
-    const [stats, setStats] = useState(null);
-    const [activities, setActivities] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchDashboardData();
-    }, []);
-
     const fetchDashboardData = async () => {
-        try {
-            const [statsRes, activitiesRes] = await Promise.all([
-                dashboardAPI.getStats(),
-                dashboardAPI.getRecentActivities()
-            ]);
-            setStats(statsRes.data.data);
-            setActivities(activitiesRes.data.data);
-        } catch (error) {
-            console.error('Failed to fetch dashboard data:', error);
-        } finally {
-            setLoading(false);
-        }
+        const [statsRes, activitiesRes] = await Promise.all([
+            dashboardAPI.getStats(),
+            dashboardAPI.getRecentActivities()
+        ]);
+        return {
+            stats: statsRes.data.data,
+            activities: activitiesRes.data.data
+        };
     };
+
+    const { data, isLoading: loading } = useQuery({
+        queryKey: ['dashboardData'],
+        queryFn: fetchDashboardData
+    });
+
+    const stats = data?.stats;
+    const activities = data?.activities;
 
     const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
 

@@ -20,35 +20,35 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const checkAuth = async () => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            try {
-                const { data } = await api.get('/auth/me');
-                setUser(data.data);
-            } catch (error) {
-                localStorage.removeItem('token');
-            }
+        try {
+            const { data } = await api.get('/auth/me');
+            setUser(data.data);
+        } catch (error) {
+            setUser(null);
         }
         setLoading(false);
     };
 
     const login = async (email, password) => {
         const { data } = await api.post('/auth/login', { email, password });
-        localStorage.setItem('token', data.data.token);
         setUser(data.data);
         return data;
     };
 
     const register = async (userData) => {
         const { data } = await api.post('/auth/register', userData);
-        localStorage.setItem('token', data.data.token);
         setUser(data.data);
         return data;
     };
 
-    const logout = () => {
-        localStorage.removeItem('token');
-        setUser(null);
+    const logout = async () => {
+        try {
+            await api.post('/auth/logout');
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            setUser(null);
+        }
     };
 
     const isSuperAdmin = user?.role === 'superadmin';

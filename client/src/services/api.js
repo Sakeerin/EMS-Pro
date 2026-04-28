@@ -4,22 +4,9 @@ const api = axios.create({
     baseURL: '/api',
     headers: {
         'Content-Type': 'application/json'
-    }
-});
-
-// Request interceptor
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
+    withCredentials: true
+});
 
 // Response interceptor
 api.interceptors.response.use(
@@ -36,7 +23,6 @@ api.interceptors.response.use(
         });
 
         if (error.response?.status === 401) {
-            localStorage.removeItem('token');
             // Only redirect if not already on login page
             if (!window.location.pathname.includes('/login')) {
                 window.location.href = '/login';
@@ -48,10 +34,10 @@ api.interceptors.response.use(
 
 export default api;
 
-// Auth API
 export const authAPI = {
     login: (data) => api.post('/auth/login', data),
     register: (data) => api.post('/auth/register', data),
+    logout: () => api.post('/auth/logout'),
     getMe: () => api.get('/auth/me'),
     changePassword: (data) => api.put('/auth/password', data)
 };

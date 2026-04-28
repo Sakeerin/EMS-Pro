@@ -137,15 +137,15 @@ router.post('/generate',
             attendanceByEmployee.get(empId).push(record);
         });
 
-        // Build payroll records — use Payroll.create() per record so pre-save hooks run
-        const payrollRecords = [];
+        // Build payroll records using batch processing
+        const payrollPayloads = [];
         for (const employee of employeesToProcess) {
             const empAttendance = attendanceByEmployee.get(employee._id.toString()) || [];
             const workingDays = empAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
             const overtimeHours = empAttendance.reduce((sum, a) => sum + (a.overtime || 0), 0);
             const lateDays = empAttendance.filter(a => a.status === 'late').length;
 
-            const payroll = await Payroll.create({
+            const rawPayload = {
                 employee: employee._id,
                 month,
                 year,
@@ -159,9 +159,17 @@ router.post('/generate',
                     socialSecurity: Math.min(employee.salary * BUSINESS_RULES.SOCIAL_SECURITY_RATE, BUSINESS_RULES.SOCIAL_SECURITY_CAP),
                     lateDeduction: lateDays * BUSINESS_RULES.LATE_DEDUCTION_PENALTY
                 }
-            });
+            };
+            
+            // Apply business calculations
+            Payroll.calculateTotals(rawPayload);
+            payrollPayloads.push(rawPayload);
+        }
 
-            payrollRecords.push(payroll);
+        // BATCH: Insert all records at once (drastically faster than loop)
+        let payrollRecords = [];
+        if (payrollPayloads.length > 0) {
+            payrollRecords = await Payroll.insertMany(payrollPayloads);
         }
 
         res.status(201).json({

@@ -4,6 +4,7 @@ import Attendance from '../models/Attendance.js';
 import Leave from '../models/Leave.js';
 import Payroll from '../models/Payroll.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { getRedisClient } from '../config/redis.js';
 
 const router = express.Router();
 
@@ -12,6 +13,24 @@ const router = express.Router();
 // @access  Private (Admin, HR)
 router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
+        const redisClient = getRedisClient();
+        const cacheKey = 'dashboard:stats';
+        
+        if (redisClient) {
+            try {
+                const cachedStats = await redisClient.get(cacheKey);
+                if (cachedStats) {
+                    return res.json({
+                        success: true,
+                        data: JSON.parse(cachedStats),
+                        cached: true
+                    });
+                }
+            } catch (err) {
+                console.warn('Redis cache get error:', err);
+            }
+        }
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -156,28 +175,38 @@ router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req
             });
         }
 
+        const responseData = {
+            employees: {
+                total: totalEmployees,
+                newThisMonth: newEmployeesThisMonth
+            },
+            attendance: {
+                total: todayAttendance,
+                present: presentToday,
+                late: lateToday,
+                absent: totalEmployees - presentToday,
+                rate: totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100) : 0
+            },
+            leaves: {
+                pending: pendingLeaves,
+                stats: leaveStats
+            },
+            departments: departmentStats,
+            attendanceTrend: last7Days,
+            payroll: payrollSummary[0] || { totalGross: 0, totalNet: 0, count: 0 }
+        };
+
+        if (redisClient) {
+            try {
+                await redisClient.setEx(cacheKey, 300, JSON.stringify(responseData)); // 5 minutes TTL
+            } catch (err) {
+                console.warn('Redis cache set error:', err);
+            }
+        }
+
         res.json({
             success: true,
-            data: {
-                employees: {
-                    total: totalEmployees,
-                    newThisMonth: newEmployeesThisMonth
-                },
-                attendance: {
-                    total: todayAttendance,
-                    present: presentToday,
-                    late: lateToday,
-                    absent: totalEmployees - presentToday,
-                    rate: totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100) : 0
-                },
-                leaves: {
-                    pending: pendingLeaves,
-                    stats: leaveStats
-                },
-                departments: departmentStats,
-                attendanceTrend: last7Days,
-                payroll: payrollSummary[0] || { totalGross: 0, totalNet: 0, count: 0 }
-            }
+            data: responseData
         });
     } catch (error) {
         res.status(500).json({

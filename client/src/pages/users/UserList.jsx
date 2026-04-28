@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     FiUsers, FiPlus, FiEdit2, FiSearch,
@@ -12,19 +13,18 @@ import './UserList.css';
 
 const UserList = () => {
     const { canManageUsers } = useAuth();
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
-    const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+    const [page, setPage] = useState(1);
 
     // Modal states
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
-    const [employees, setEmployees] = useState([]);
+    const [showPasswordFor, setShowPasswordFor] = useState(null);
     const [showPasswordFor, setShowPasswordFor] = useState(null); // Track which user's password is visible
 
     // Form state
@@ -34,98 +34,99 @@ const UserList = () => {
         role: 'employee'
     });
 
-    useEffect(() => {
-        fetchUsers();
-    }, [search, roleFilter, statusFilter, pagination.page]);
-
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
+    const { data: usersData, isLoading: loading } = useQuery({
+        queryKey: ['users', page, search, roleFilter, statusFilter],
+        queryFn: async () => {
             const { data } = await userAPI.getAll({
-                page: pagination.page,
+                page,
                 limit: 10,
                 search,
                 role: roleFilter,
                 status: statusFilter
             });
-            setUsers(data.data);
-            setPagination(data.pagination);
-        } catch (error) {
-            toast.error('Failed to fetch users');
-        } finally {
-            setLoading(false);
+            return data;
         }
-    };
+    });
 
-    const fetchEmployees = async () => {
-        try {
+    const users = usersData?.data || [];
+    const pagination = usersData?.pagination || { page: 1, pages: 1, total: 0 };
+
+    const { data: employeesData } = useQuery({
+        queryKey: ['employees', 'link'],
+        queryFn: async () => {
             const { data } = await employeeAPI.getAll({ limit: 100 });
-            setEmployees(data.data);
-        } catch (error) {
-            console.error('Failed to fetch employees:', error);
-        }
-    };
+            return data.data;
+        },
+        enabled: showLinkModal
+    });
 
-    const handleCreate = async (e) => {
-        e.preventDefault();
-        try {
-            await userAPI.create(formData);
+    const employees = employeesData || [];
+
+    const createMutation = useMutation({
+        mutationFn: (data) => userAPI.create(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['users']);
             toast.success('User created successfully');
             setShowCreateModal(false);
             setFormData({ email: '', password: '', role: 'employee' });
-            fetchUsers();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to create user');
-        }
-    };
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Failed to create user')
+    });
 
-    const handleEdit = async (e) => {
-        e.preventDefault();
-        try {
-            await userAPI.update(selectedUser._id, {
-                email: formData.email,
-                role: formData.role,
-                isActive: formData.isActive
-            });
-            toast.success('User updated successfully');
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }) => userAPI.update(id, data),
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries(['users']);
+            toast.success(`User ${variables.data.isActive !== undefined ? 'status updated' : 'updated'} successfully`);
             setShowEditModal(false);
             setSelectedUser(null);
-            fetchUsers();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to update user');
-        }
-    };
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Failed to update user')
+    });
 
-    const handleLinkEmployee = async (employeeId) => {
-        try {
-            await userAPI.linkEmployee(selectedUser._id, employeeId);
+    const linkMutation = useMutation({
+        mutationFn: ({ userId, employeeId }) => userAPI.linkEmployee(userId, employeeId),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['users']);
             toast.success('User linked to employee successfully');
             setShowLinkModal(false);
             setSelectedUser(null);
-            fetchUsers();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to link employee');
-        }
-    };
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Failed to link employee')
+    });
 
-    const handleUnlinkEmployee = async (userId) => {
-        try {
-            await userAPI.unlinkEmployee(userId);
+    const unlinkMutation = useMutation({
+        mutationFn: (userId) => userAPI.unlinkEmployee(userId),
+        onSuccess: () => {
+            queryClient.invalidateQueries(['users']);
             toast.success('Employee unlinked successfully');
-            fetchUsers();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to unlink employee');
-        }
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Failed to unlink employee')
+    });
+
+    const handleCreate = (e) => {
+        e.preventDefault();
+        createMutation.mutate(formData);
     };
 
-    const handleToggleStatus = async (user) => {
-        try {
-            await userAPI.update(user._id, { isActive: !user.isActive });
-            toast.success(`User ${user.isActive ? 'deactivated' : 'activated'} successfully`);
-            fetchUsers();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to update user status');
-        }
+    const handleEdit = (e) => {
+        e.preventDefault();
+        updateMutation.mutate({
+            id: selectedUser._id,
+            data: { email: formData.email, role: formData.role, isActive: formData.isActive }
+        });
+    };
+
+    const handleLinkEmployee = (employeeId) => {
+        linkMutation.mutate({ userId: selectedUser._id, employeeId });
+    };
+
+    const handleUnlinkEmployee = (userId) => {
+        unlinkMutation.mutate(userId);
+    };
+
+    const handleToggleStatus = (user) => {
+        updateMutation.mutate({ id: user._id, data: { isActive: !user.isActive } });
     };
 
     const openEditModal = (user) => {
@@ -140,7 +141,6 @@ const UserList = () => {
 
     const openLinkModal = (user) => {
         setSelectedUser(user);
-        fetchEmployees();
         setShowLinkModal(true);
     };
 
@@ -365,7 +365,7 @@ const UserList = () => {
                         <button
                             className="btn btn-sm"
                             disabled={pagination.page === 1}
-                            onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                            onClick={() => setPage(p => p - 1)}
                         >
                             Previous
                         </button>
@@ -373,7 +373,7 @@ const UserList = () => {
                         <button
                             className="btn btn-sm"
                             disabled={pagination.page === pagination.pages}
-                            onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                            onClick={() => setPage(p => p + 1)}
                         >
                             Next
                         </button>

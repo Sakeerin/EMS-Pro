@@ -82,32 +82,43 @@ const payrollSchema = new mongoose.Schema({
 // Compound index for unique payroll per employee per month/year
 payrollSchema.index({ employee: 1, month: 1, year: 1 }, { unique: true });
 
-// Calculate totals before saving
-payrollSchema.pre('save', function (next) {
+// Extracted calculation logic so it can be reused in bulk inserts
+payrollSchema.statics.calculateTotals = function (doc) {
     // Calculate overtime amount
     const monthlyDays = BUSINESS_RULES?.STANDARD_MONTHLY_WORKING_DAYS || 22;
     const dailyHours = BUSINESS_RULES?.STANDARD_WORKING_HOURS || 8;
-    const hourlyRate = this.baseSalary / (monthlyDays * dailyHours);
-    this.overtime.amount = this.overtime.hours * hourlyRate * this.overtime.rate;
+    const hourlyRate = doc.baseSalary / (monthlyDays * dailyHours);
+    
+    if (!doc.overtime) doc.overtime = { hours: 0, rate: 1.5, amount: 0 };
+    if (!doc.allowances) doc.allowances = { housing: 0, transport: 0, meal: 0, other: 0 };
+    if (!doc.deductions) doc.deductions = { tax: 0, socialSecurity: 0, providentFund: 0, lateDeduction: 0, other: 0 };
+    if (!doc.bonus) doc.bonus = 0;
+
+    doc.overtime.amount = (doc.overtime.hours || 0) * hourlyRate * (doc.overtime.rate || 1.5);
 
     // Calculate gross salary — explicitly sum known allowance fields
-    // (Object.values() on Mongoose subdocs may include internal properties)
-    const totalAllowances = (this.allowances.housing || 0) +
-        (this.allowances.transport || 0) +
-        (this.allowances.meal || 0) +
-        (this.allowances.other || 0);
-    this.grossSalary = this.baseSalary + this.overtime.amount + totalAllowances + this.bonus;
+    const totalAllowances = (doc.allowances.housing || 0) +
+        (doc.allowances.transport || 0) +
+        (doc.allowances.meal || 0) +
+        (doc.allowances.other || 0);
+    doc.grossSalary = doc.baseSalary + doc.overtime.amount + totalAllowances + doc.bonus;
 
     // Calculate total deductions — explicitly sum known deduction fields
-    this.totalDeductions = (this.deductions.tax || 0) +
-        (this.deductions.socialSecurity || 0) +
-        (this.deductions.providentFund || 0) +
-        (this.deductions.lateDeduction || 0) +
-        (this.deductions.other || 0);
+    doc.totalDeductions = (doc.deductions.tax || 0) +
+        (doc.deductions.socialSecurity || 0) +
+        (doc.deductions.providentFund || 0) +
+        (doc.deductions.lateDeduction || 0) +
+        (doc.deductions.other || 0);
 
     // Calculate net salary
-    this.netSalary = this.grossSalary - this.totalDeductions;
+    doc.netSalary = doc.grossSalary - doc.totalDeductions;
 
+    return doc;
+};
+
+// Calculate totals before saving
+payrollSchema.pre('save', function (next) {
+    this.constructor.calculateTotals(this);
     next();
 });
 
