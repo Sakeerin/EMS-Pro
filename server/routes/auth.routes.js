@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { MemoryStore } from 'express-rate-limit';
 import User from '../models/User.js';
 import Employee from '../models/Employee.js';
 import { protect, generateToken } from '../middleware/auth.js';
@@ -20,10 +20,11 @@ const getLimiterStore = () => {
                 this.redisStore = new RedisStore({
                     sendCommand: (...args) => this.client.sendCommand(args),
                 });
+                this.redisStore.init(options);
             } else {
                 // Use default memory store
-                const { MemoryStore } = require('express-rate-limit');
                 this.memoryStore = new MemoryStore();
+                this.memoryStore.init(options);
             }
         },
         increment: async function (key) {

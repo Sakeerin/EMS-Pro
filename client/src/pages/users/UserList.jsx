@@ -24,7 +24,6 @@ const UserList = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
-    const [showPasswordFor, setShowPasswordFor] = useState(null);
     const [showPasswordFor, setShowPasswordFor] = useState(null); // Track which user's password is visible
 
     // Form state
