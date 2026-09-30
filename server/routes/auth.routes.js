@@ -9,39 +9,44 @@ import { getRedisClient } from '../config/redis.js';
 
 const router = express.Router();
 
-// Helper to create store that falls back to memory
-const getLimiterStore = () => {
-    return {
-        // We defer store creation until the first request to ensure Redis had time to connect
-        init: function (options) {
-            this.options = options;
-            this.client = getRedisClient();
-            if (this.client) {
-                this.redisStore = new RedisStore({
-                    sendCommand: (...args) => this.client.sendCommand(args),
-                });
-                this.redisStore.init(options);
-            } else {
-                // Use default memory store
-                this.memoryStore = new MemoryStore();
-                this.memoryStore.init(options);
-            }
-        },
-        increment: async function (key) {
-            if (this.redisStore) return this.redisStore.increment(key);
-            if (this.memoryStore) return this.memoryStore.increment(key);
-            return { totalHits: 1, resetTime: new Date() }; // Fallback fallback
-        },
-        decrement: async function (key) {
-            if (this.redisStore) return this.redisStore.decrement(key);
-            if (this.memoryStore) return this.memoryStore.decrement(key);
-        },
-        resetKey: async function (key) {
-            if (this.redisStore) return this.redisStore.resetKey(key);
-            if (this.memoryStore) return this.memoryStore.resetKey(key);
+// Rate limit store that uses Redis while it is connected and memory otherwise.
+// The store is picked on every request because rateLimit() calls init() at
+// import time, before Redis has connected. Each limiter needs its own prefix
+// so their counters don't share Redis keys.
+const createLimiterStore = (prefix) => ({
+    prefix,
+    init(options) {
+        this.options = options;
+        this.memoryStore = new MemoryStore();
+        this.memoryStore.init(options);
+    },
+    getRedisStore() {
+        const client = getRedisClient();
+        if (!client) return null;
+        if (!this.redisStore) {
+            this.redisStore = new RedisStore({
+                prefix,
+                sendCommand: (...args) => client.sendCommand(args),
+            });
+            this.redisStore.init(this.options);
         }
-    };
-};
+        return this.redisStore;
+    },
+    async run(method, key) {
+        const redisStore = this.getRedisStore();
+        if (redisStore) {
+            try {
+                return await redisStore[method](key);
+            } catch (err) {
+                console.warn(`⚠️  Rate limit Redis ${method} failed, using memory store: ${err.message}`);
+            }
+        }
+        return this.memoryStore[method](key);
+    },
+    increment(key) { return this.run('increment', key); },
+    decrement(key) { return this.run('decrement', key); },
+    resetKey(key) { return this.run('resetKey', key); }
+});
 
 // Rate limiting for auth endpoints
 const authLimiter = rateLimit({
@@ -53,7 +58,7 @@ const authLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    store: getLimiterStore()
+    store: createLimiterStore('rl:auth:')
 });
 
 // Stricter rate limiting for login (brute-force protection)
@@ -66,7 +71,7 @@ const loginLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    store: getLimiterStore()
+    store: createLimiterStore('rl:login:')
 });
 
 // Validation middleware helper
