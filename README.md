@@ -162,6 +162,7 @@ The project has no unit-test framework yet. These scripts exercise the real API 
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
+| `node scripts/verify-security-fixes.js` | Upload access (login required, JD files only for their employee and HR roles), random upload names, the `/uploads` dev proxy, id validation and own-account guards |
 | `node scripts/verify-user-password-hook.js` | Password hashing hook leaves unchanged passwords alone (talks to MongoDB directly, using a throwaway `ems_verify_*` database; no API needed) |
 
 Each script clears its own test data, but the login limits it triggers stay in Redis. Clear the `rl:*` keys (command above) before each run and after `verify-login-rate-limit.js`, which leaves your IP rate limited.
@@ -170,6 +171,7 @@ Each script clears its own test data, but the login limits it triggers stay in R
 
 - **Behind a reverse proxy** (nginx, a load balancer, etc.), set `TRUST_PROXY` to the number of proxy hops (usually `1`) or the proxy's address/subnet. Otherwise every user appears to come from the proxy's IP and they all share one login limit. Leave it unset when there's no proxy: trusting `X-Forwarded-For` without one lets clients spoof their IP.
 - Set `NODE_ENV=production` so auth cookies are sent with `Secure`, and use a strong, unique `JWT_SECRET`.
+- Uploaded files (`/uploads/...`) are served by the API and require the login cookie; job description files are further limited to their employee and HR/admin roles. Route both `/api` and `/uploads` to the API on the same site as the frontend (the Vite dev server does this for you), or avatars and JD links won't load.
 - Point `REDIS_URL` at your Redis instance so rate limits are shared between server instances.
 - Existing accounts that were created by a SuperAdmin on the Users page are flagged to change their password, so they are sent to `/change-password` at their next request. Employees created before temporary passwords were introduced never received one; reset them from the Users page.
 

@@ -5,6 +5,8 @@ import connectDB from './config/db.js';
 import connectRedis from './config/redis.js';
 import cookieParser from 'cookie-parser';
 import { invalidateDashboardStats } from './middleware/cache.js';
+import { protect } from './middleware/auth.js';
+import { authorizeJobDescription } from './middleware/uploads.js';
 
 // Import Routes
 import authRoutes from './routes/auth.routes.js';
@@ -60,8 +62,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Static files for uploads
-app.use('/uploads', express.static('uploads'));
+// Uploaded files require a login; job description files are further limited to
+// their employee and HR/admin roles. Only these two folders are served, so a
+// path like /uploads//jd/... can't reach the JD files around the check
+app.use('/uploads/avatars', protect, express.static('uploads/avatars'));
+app.use('/uploads/jd', protect, authorizeJobDescription, express.static('uploads/jd'));
 
 // Writes under these routes change the numbers on the dashboard
 app.use(['/api/employees', '/api/departments', '/api/attendance', '/api/leaves', '/api/payroll'], invalidateDashboardStats);

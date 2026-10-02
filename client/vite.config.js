@@ -9,6 +9,11 @@ export default defineConfig({
             '/api': {
                 target: 'http://localhost:5000',
                 changeOrigin: true
+            },
+            // Avatars and JD files are served by the API server
+            '/uploads': {
+                target: 'http://localhost:5000',
+                changeOrigin: true
             }
         }
     }

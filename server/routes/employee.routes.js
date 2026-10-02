@@ -1,6 +1,7 @@
 import express from 'express';
-import { body, param, validationResult } from 'express-validator';
+import { body, validationResult } from 'express-validator';
 import { protect, authorize } from '../middleware/auth.js';
+import { objectIdParam } from '../middleware/validators.js';
 import { uploadAvatar, uploadJD } from '../services/storage.service.js';
 import {
     generateId,
@@ -57,7 +58,7 @@ router.put('/:id',
     protect,
     authorize('superadmin', 'admin', 'hr'),
     [
-        param('id').isMongoId().withMessage('Invalid employee ID'),
+        objectIdParam('id', 'Invalid employee ID'),
         body('email').optional().isEmail().withMessage('Valid email is required').normalizeEmail(),
         body('salary').optional().isFloat({ min: 0 }).withMessage('Salary must be a positive number'),
         body('department').optional().isMongoId().withMessage('Invalid department ID'),

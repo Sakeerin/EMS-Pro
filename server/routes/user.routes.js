@@ -1,8 +1,9 @@
 import express from 'express';
-import { body, param, query, validationResult } from 'express-validator';
+import { body, query, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize, canManageUsers } from '../middleware/auth.js';
+import { objectIdParam } from '../middleware/validators.js';
 
 const router = express.Router();
 
@@ -101,7 +102,7 @@ router.get('/', async (req, res) => {
 // @desc    Get single user by ID
 // @access  SuperAdmin only
 router.get('/:id',
-    [param('id').isMongoId().withMessage('Invalid user ID')],
+    [objectIdParam('id', 'Invalid user ID')],
     validate,
     async (req, res) => {
         try {
@@ -215,7 +216,7 @@ router.post('/',
 // @access  SuperAdmin only
 router.put('/:id',
     [
-        param('id').isMongoId().withMessage('Invalid user ID'),
+        objectIdParam('id', 'Invalid user ID'),
         body('email')
             .optional()
             .isEmail().withMessage('Please enter a valid email')
@@ -233,8 +234,8 @@ router.put('/:id',
             const { email, role, isActive } = req.body;
             const userId = req.params.id;
 
-            // Prevent modifying own account role
-            if (userId === req.user._id.toString() && role && role !== req.user.role) {
+            // Prevent modifying own account role (ObjectId compare: an uppercase id is the same user)
+            if (req.user._id.equals(userId) && role && role !== req.user.role) {
                 return res.status(400).json({
                     success: false,
                     message: 'Cannot modify your own role'
@@ -285,7 +286,7 @@ router.put('/:id',
 // @access  SuperAdmin only
 router.put('/:id/link-employee',
     [
-        param('id').isMongoId().withMessage('Invalid user ID'),
+        objectIdParam('id', 'Invalid user ID'),
         body('employeeId')
             .optional({ nullable: true })
             .isMongoId().withMessage('Invalid employee ID'),
@@ -355,8 +356,7 @@ router.put('/:id/link-employee',
 // @desc    Replace a user's password with a temporary one they must change at next login
 // @access  SuperAdmin only
 router.post('/:id/reset-password',
-    // Plain 24-hex only: isMongoId() also accepts 0x-prefixed strings that findById can't cast
-    [param('id').matches(/^[0-9a-fA-F]{24}$/).withMessage('Invalid user ID')],
+    [objectIdParam('id', 'Invalid user ID')],
     validate,
     async (req, res) => {
         try {
@@ -399,14 +399,14 @@ router.post('/:id/reset-password',
 // @desc    Deactivate user (soft delete)
 // @access  SuperAdmin only
 router.delete('/:id',
-    [param('id').isMongoId().withMessage('Invalid user ID')],
+    [objectIdParam('id', 'Invalid user ID')],
     validate,
     async (req, res) => {
         try {
             const userId = req.params.id;
 
             // Prevent deleting own account
-            if (userId === req.user._id.toString()) {
+            if (req.user._id.equals(userId)) {
                 return res.status(400).json({
                     success: false,
                     message: 'Cannot deactivate your own account'

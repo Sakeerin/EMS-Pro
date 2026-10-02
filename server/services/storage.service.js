@@ -1,6 +1,10 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
+
+// Random names so stored files can't be found by guessing (they used to be timestamps)
+const randomFileName = (prefix, file) => `${prefix}-${crypto.randomBytes(16).toString('hex')}${path.extname(file.originalname)}`;
 
 // Ensure upload directories exist
 const uploadDirs = ['uploads/avatars', 'uploads/jd'];
@@ -16,7 +20,7 @@ const avatarStorage = multer.diskStorage({
         cb(null, 'uploads/avatars');
     },
     filename: (req, file, cb) => {
-        cb(null, `avatar-${Date.now()}${path.extname(file.originalname)}`);
+        cb(null, randomFileName('avatar', file));
     }
 });
 
@@ -26,7 +30,7 @@ const jdStorage = multer.diskStorage({
         cb(null, 'uploads/jd');
     },
     filename: (req, file, cb) => {
-        cb(null, `jd-${Date.now()}${path.extname(file.originalname)}`);
+        cb(null, randomFileName('jd', file));
     }
 });
 
