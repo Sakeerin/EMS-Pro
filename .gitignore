@@ -37,6 +37,9 @@ pids/
 .DS_Store
 Thumbs.db
 
+# Claude Code: .claude/launch.json is shared; personal settings stay local
+.claude/settings.local.json
+
 # Testing
 coverage/
 .nyc_output/
