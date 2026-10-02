@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { FiUser, FiMail, FiPhone, FiMapPin, FiCalendar, FiDollarSign, FiArrowLeft, FiUpload, FiUsers, FiFile, FiRefreshCw } from 'react-icons/fi';
 import { employeeAPI, departmentAPI } from '../../services/api';
 import toast from 'react-hot-toast';
+import TempPasswordModal from '../../components/common/TempPasswordModal';
 import './Employees.css';
 
 const EmployeeForm = () => {
@@ -15,6 +16,7 @@ const EmployeeForm = () => {
     const [departments, setDepartments] = useState([]);
     const [supervisors, setSupervisors] = useState([]);
     const [jdFile, setJdFile] = useState(null);
+    const [createdAccount, setCreatedAccount] = useState(null); // { email, tempPassword } after create
     const [formData, setFormData] = useState({
         employeeId: '',
         firstName: '',
@@ -178,17 +180,30 @@ const EmployeeForm = () => {
                 }
 
                 toast.success('Employee updated successfully');
+                navigate('/employees');
             } else {
-                const response = await employeeAPI.create(employeeData);
+                const { data: created } = await employeeAPI.create(employeeData);
+                toast.success('Employee created successfully');
 
-                // Upload JD file if selected
-                if (jdFile && response.data.data._id) {
-                    await employeeAPI.uploadJD(response.data.data._id, jdFile);
+                // Show the one-time password before anything else can fail
+                if (created.tempPassword) {
+                    setCreatedAccount({ email: created.data.email, tempPassword: created.tempPassword });
                 }
 
-                toast.success('Employee created successfully');
+                // Upload JD file if selected. The employee and account already
+                // exist, so a failure here only warns
+                if (jdFile && created.data._id) {
+                    try {
+                        await employeeAPI.uploadJD(created.data._id, jdFile);
+                    } catch (uploadError) {
+                        toast.error(uploadError.response?.data?.message || 'Employee created, but the JD upload failed');
+                    }
+                }
+
+                if (!created.tempPassword) {
+                    navigate('/employees');
+                }
             }
-            navigate('/employees');
         } catch (error) {
             toast.error(error.response?.data?.message || 'Operation failed');
         } finally {
@@ -783,6 +798,14 @@ const EmployeeForm = () => {
                     </div>
                 </div>
             </form>
+
+            {createdAccount && (
+                <TempPasswordModal
+                    email={createdAccount.email}
+                    password={createdAccount.tempPassword}
+                    onClose={() => navigate('/employees')}
+                />
+            )}
         </motion.div>
     );
 };
