@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import rateLimit, { MemoryStore } from 'express-rate-limit';
+import rateLimit, { MemoryStore, ipKeyGenerator } from 'express-rate-limit';
 import User from '../models/User.js';
 import Employee from '../models/Employee.js';
 import { protect, generateToken } from '../middleware/auth.js';
@@ -61,10 +61,14 @@ const authLimiter = rateLimit({
     store: createLimiterStore('rl:auth:')
 });
 
-// Stricter rate limiting for login (brute-force protection)
+// Login brute-force protection. Only failed attempts count, so people signing
+// in successfully from a shared office IP never use up the limit.
+// Per account and IP: 5 failed attempts per 15 minutes
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 login attempts per windowMs
+    max: 5,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => `${ipKeyGenerator(req.ip)}:${String(req.body?.email || '').trim().toLowerCase()}`,
     message: {
         success: false,
         message: 'Too many login attempts, please try again after 15 minutes'
@@ -72,6 +76,21 @@ const loginLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createLimiterStore('rl:login:')
+});
+
+// Per IP across all accounts: 50 failed attempts per 15 minutes, against
+// password spraying from one address
+const loginIpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50,
+    skipSuccessfulRequests: true,
+    message: {
+        success: false,
+        message: 'Too many failed login attempts from this network, please try again after 15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: createLimiterStore('rl:login-ip:')
 });
 
 // Validation middleware helper
@@ -158,6 +177,7 @@ router.post('/register',
 // @desc    Login user
 // @access  Public
 router.post('/login',
+    loginIpLimiter,
     loginLimiter,
     [
         body('email')

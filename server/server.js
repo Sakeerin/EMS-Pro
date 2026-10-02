@@ -41,6 +41,15 @@ connectRedis();
 
 const app = express();
 
+// Behind a reverse proxy, set TRUST_PROXY (a hop count like 1, or a trusted
+// address/subnet) so req.ip and rate limiting see the real client address.
+// Leave it unset otherwise: trusting X-Forwarded-For without a proxy lets
+// clients spoof their IP and dodge the login limits
+if (process.env.TRUST_PROXY) {
+    const trustProxy = process.env.TRUST_PROXY;
+    app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+}
+
 // Middleware
 app.use(cors({
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
