@@ -52,8 +52,10 @@ const leaveSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Calculate days before saving (Business Days only)
-leaveSchema.pre('save', function (next) {
+// Calculate days (business days only) before validation: `days` is required,
+// and validation runs before pre('save') hooks, so computing it there failed
+// every new leave request
+leaveSchema.pre('validate', function (next) {
     if (this.startDate && this.endDate) {
         let businessDays = 0;
         let currentDate = new Date(this.startDate);
