@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
 // Layout
@@ -7,6 +7,7 @@ import Layout from './components/layout/Layout';
 // Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import ChangePassword from './pages/auth/ChangePassword';
 import Dashboard from './pages/dashboard/Dashboard';
 import EmployeeList from './pages/employees/EmployeeList';
 import EmployeeForm from './pages/employees/EmployeeForm';
@@ -21,6 +22,7 @@ import UserList from './pages/users/UserList';
 // Protected Route Component
 const ProtectedRoute = ({ children, roles }) => {
     const { user, loading, isAuthenticated } = useAuth();
+    const location = useLocation();
 
     if (loading) {
         return (
@@ -32,6 +34,11 @@ const ProtectedRoute = ({ children, roles }) => {
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
+    }
+
+    // Users on a temporary password must change it before anything else
+    if (user.mustChangePassword && location.pathname !== '/change-password') {
+        return <Navigate to="/change-password" replace />;
     }
 
     if (roles && !roles.includes(user.role)) {
@@ -57,6 +64,11 @@ function App() {
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/change-password" element={
+                <ProtectedRoute>
+                    <ChangePassword />
+                </ProtectedRoute>
+            } />
 
             {/* Protected Routes */}
             <Route path="/" element={

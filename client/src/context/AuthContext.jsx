@@ -51,6 +51,11 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Clears the temporary-password flag locally after a successful change
+    const markPasswordChanged = () => {
+        setUser(prev => (prev ? { ...prev, mustChangePassword: false } : prev));
+    };
+
     const isSuperAdmin = user?.role === 'superadmin';
     const isAdmin = user?.role === 'admin' || isSuperAdmin;
     const isHR = user?.role === 'hr' || isAdmin;
@@ -71,6 +76,7 @@ export const AuthProvider = ({ children }) => {
             login,
             register,
             logout,
+            markPasswordChanged,
             isSuperAdmin,
             isAdmin,
             isHR,
