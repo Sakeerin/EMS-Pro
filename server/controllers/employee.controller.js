@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
+import { sendWriteError } from '../utils/writeErrors.js';
 
 // Helper function to get Thai year
 const getThaiYear = () => {
@@ -274,17 +275,7 @@ export const createEmployee = async (req, res) => {
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
-        
-        if (error.code === 11000) {
-            return res.status(400).json({
-                success: false,
-                message: 'An account with this email already exists'
-            });
-        }
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create employee'
-        });
+        sendWriteError(res, error, 'Failed to create employee');
     }
 };
 
@@ -329,10 +320,7 @@ export const updateEmployee = async (req, res) => {
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update employee'
-        });
+        sendWriteError(res, error, 'Failed to update employee');
     }
 };
 

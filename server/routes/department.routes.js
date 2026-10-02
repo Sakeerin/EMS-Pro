@@ -2,6 +2,7 @@ import express from 'express';
 import { body, param, validationResult } from 'express-validator';
 import Department from '../models/Department.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { sendWriteError } from '../utils/writeErrors.js';
 
 // Validation middleware helper
 const validate = (req, res, next) => {
@@ -89,16 +90,7 @@ router.post('/',
                 data: department
             });
         } catch (error) {
-            if (error.code === 11000) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Department name or code already exists'
-                });
-            }
-            res.status(500).json({
-                success: false,
-                message: 'Failed to create department'
-            });
+            sendWriteError(res, error, 'Failed to create department');
         }
     }
 );
@@ -126,10 +118,7 @@ router.put('/:id', protect, authorize('superadmin', 'admin', 'hr'), async (req, 
             data: department
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        sendWriteError(res, error, 'Failed to update department');
     }
 });
 
