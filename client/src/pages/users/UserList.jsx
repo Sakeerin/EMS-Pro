@@ -4,15 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     FiUsers, FiPlus, FiEdit2, FiSearch,
     FiLink, FiCheck, FiX, FiFilter,
-    FiUserCheck, FiUserX, FiMinusCircle, FiCopy, FiEye, FiEyeOff
+    FiUserCheck, FiUserX, FiMinusCircle, FiKey
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { userAPI, employeeAPI } from '../../services/api';
+import TempPasswordModal from '../../components/common/TempPasswordModal';
 import toast from 'react-hot-toast';
 import './UserList.css';
 
 const UserList = () => {
-    const { canManageUsers } = useAuth();
+    const { canManageUsers, user: currentUser } = useAuth();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('');
@@ -24,7 +25,7 @@ const UserList = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
-    const [showPasswordFor, setShowPasswordFor] = useState(null); // Track which user's password is visible
+    const [resetResult, setResetResult] = useState(null); // { email, tempPassword } after a reset
 
     // Form state
     const [formData, setFormData] = useState({
@@ -103,6 +104,15 @@ const UserList = () => {
         onError: (error) => toast.error(error.response?.data?.message || 'Failed to unlink employee')
     });
 
+    const resetPasswordMutation = useMutation({
+        mutationFn: (user) => userAPI.resetPassword(user._id),
+        onSuccess: ({ data }, user) => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            setResetResult({ email: user.email, tempPassword: data.data.tempPassword });
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Failed to reset password')
+    });
+
     const handleCreate = (e) => {
         e.preventDefault();
         createMutation.mutate(formData);
@@ -163,12 +173,11 @@ const UserList = () => {
         });
     };
 
-    const copyToClipboard = (text, label = 'Password') => {
-        navigator.clipboard.writeText(text).then(() => {
-            toast.success(`${label} copied to clipboard!`);
-        }).catch(() => {
-            toast.error('Failed to copy');
-        });
+    const handleResetPassword = (user) => {
+        if (!window.confirm(`Reset the password for ${user.email}? Their current password will stop working immediately.`)) {
+            return;
+        }
+        resetPasswordMutation.mutate(user);
     };
 
     if (!canManageUsers) {
@@ -254,7 +263,6 @@ const UserList = () => {
                                 <tr>
                                     <th>Email</th>
                                     <th>Role</th>
-                                    <th>Initial Password</th>
                                     <th>Linked Employee</th>
                                     <th>Status</th>
                                     <th>Last Login</th>
@@ -280,31 +288,6 @@ const UserList = () => {
                                             <span className={`badge ${getRoleBadgeClass(user.role)}`}>
                                                 {user.role}
                                             </span>
-                                        </td>
-                                        <td>
-                                            {user.tempPassword ? (
-                                                <div className="password-cell">
-                                                    <code className="password-display">
-                                                        {showPasswordFor === user._id ? user.tempPassword : '••••••••••'}
-                                                    </code>
-                                                    <button
-                                                        className="btn-icon btn-sm"
-                                                        onClick={() => setShowPasswordFor(showPasswordFor === user._id ? null : user._id)}
-                                                        title={showPasswordFor === user._id ? 'Hide password' : 'Show password'}
-                                                    >
-                                                        {showPasswordFor === user._id ? <FiEyeOff /> : <FiEye />}
-                                                    </button>
-                                                    <button
-                                                        className="btn-icon btn-sm"
-                                                        onClick={() => copyToClipboard(user.tempPassword)}
-                                                        title="Copy password"
-                                                    >
-                                                        <FiCopy />
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-muted">—</span>
-                                            )}
                                         </td>
                                         <td>
                                             {user.employee ? (
@@ -342,6 +325,16 @@ const UserList = () => {
                                                 >
                                                     <FiEdit2 />
                                                 </button>
+                                                {user._id !== currentUser?._id && (
+                                                    <button
+                                                        className="btn-icon"
+                                                        onClick={() => handleResetPassword(user)}
+                                                        disabled={resetPasswordMutation.isPending}
+                                                        title="Reset password"
+                                                    >
+                                                        <FiKey />
+                                                    </button>
+                                                )}
                                                 <button
                                                     className={`btn-icon ${user.isActive ? 'btn-danger' : 'btn-success'}`}
                                                     onClick={() => handleToggleStatus(user)}
@@ -587,6 +580,14 @@ const UserList = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {resetResult && (
+                <TempPasswordModal
+                    email={resetResult.email}
+                    password={resetResult.tempPassword}
+                    onClose={() => setResetResult(null)}
+                />
+            )}
         </motion.div>
     );
 };

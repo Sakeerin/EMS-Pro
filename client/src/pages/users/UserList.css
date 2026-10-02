@@ -208,29 +208,6 @@
     opacity: 1;
 }
 
-/* Password Cell */
-.password-cell {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.password-display {
-    font-family: 'Monaco', 'Consolas', monospace;
-    font-size: 0.85rem;
-    padding: 0.35rem 0.6rem;
-    background: var(--glass-bg);
-    border-radius: var(--radius-md);
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
-}
-
-.password-cell .btn-icon.btn-sm {
-    width: 28px;
-    height: 28px;
-    font-size: 0.85rem;
-}
-
 .text-muted {
     color: var(--text-secondary);
     font-style: italic;

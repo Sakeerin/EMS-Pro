@@ -119,5 +119,6 @@ export const userAPI = {
     linkEmployee: (id, employeeId) => api.put(`/users/${id}/link-employee`, { employeeId }),
     unlinkEmployee: (id) => api.put(`/users/${id}/link-employee`, { employeeId: null }),
     delete: (id) => api.delete(`/users/${id}`),
+    resetPassword: (id) => api.post(`/users/${id}/reset-password`),
     getUnlinkedEmployees: () => api.get('/users/employees/unlinked')
 };
