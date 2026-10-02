@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 // Password validation regex: min 8 chars, at least 1 uppercase, 1 lowercase, 1 number
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -58,6 +59,11 @@ userSchema.statics.validatePasswordStrength = function (password) {
         };
     }
     return { valid: true };
+};
+
+// Static method to generate a temporary password for new or reset accounts
+userSchema.statics.generateTempPassword = function () {
+    return crypto.randomBytes(4).toString('hex') + 'A1';
 };
 
 // Hash password before saving

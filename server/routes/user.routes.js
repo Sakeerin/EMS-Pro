@@ -351,6 +351,48 @@ router.put('/:id/link-employee',
     }
 );
 
+// @route   POST /api/users/:id/reset-password
+// @desc    Replace a user's password with a temporary one they must change at next login
+// @access  SuperAdmin only
+router.post('/:id/reset-password',
+    [param('id').isMongoId().withMessage('Invalid user ID')],
+    validate,
+    async (req, res) => {
+        try {
+            if (req.params.id === req.user._id.toString()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Use Settings to change your own password'
+                });
+            }
+
+            const user = await User.findById(req.params.id);
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'User not found'
+                });
+            }
+
+            const tempPassword = User.generateTempPassword();
+            user.password = tempPassword;
+            user.mustChangePassword = true;
+            await user.save();
+
+            // Shown once to the superadmin; only the hash is stored
+            res.json({
+                success: true,
+                data: { tempPassword }
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to reset password'
+            });
+        }
+    }
+);
+
 // @route   DELETE /api/users/:id
 // @desc    Deactivate user (soft delete)
 // @access  SuperAdmin only

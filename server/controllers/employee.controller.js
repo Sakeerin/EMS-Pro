@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import crypto from 'crypto';
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
 
@@ -249,11 +248,11 @@ export const createEmployee = async (req, res) => {
         const employee = new Employee(req.body);
         await employee.save({ session });
 
-        const randomPassword = crypto.randomBytes(4).toString('hex') + 'A1';
+        const tempPassword = User.generateTempPassword();
 
         const user = new User({
             email: req.body.email,
-            password: randomPassword,
+            password: tempPassword,
             role: 'employee',
             employee: employee._id,
             isActive: true,
@@ -268,6 +267,8 @@ export const createEmployee = async (req, res) => {
             success: true,
             data: employee,
             userCreated: true,
+            // Shown once to the creator; only the hash is stored
+            tempPassword,
             message: `Employee created. User account created with email: ${req.body.email}. User must change password on first login.`
         });
     } catch (error) {
