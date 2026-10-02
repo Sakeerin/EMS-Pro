@@ -1,6 +1,13 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
+// The only requests a user on a temporary password may make
+const PASSWORD_CHANGE_ALLOWED = new Set([
+    'GET /api/auth/me',
+    'PUT /api/auth/password',
+    'POST /api/auth/logout'
+]);
+
 // Protect routes - verify JWT token
 export const protect = async (req, res, next) => {
     let token;
@@ -28,6 +35,17 @@ export const protect = async (req, res, next) => {
                     success: false,
                     message: 'Account is deactivated'
                 });
+            }
+
+            if (req.user.mustChangePassword) {
+                const path = req.originalUrl.split('?')[0];
+                if (!PASSWORD_CHANGE_ALLOWED.has(`${req.method} ${path}`)) {
+                    return res.status(403).json({
+                        success: false,
+                        code: 'PASSWORD_CHANGE_REQUIRED',
+                        message: 'Password change required'
+                    });
+                }
             }
 
             return next();

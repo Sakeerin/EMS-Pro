@@ -267,6 +267,9 @@ router.put('/password',
             .isLength({ min: 8 }).withMessage('New password must be at least 8 characters')
             .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
             .withMessage('Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'),
+        body('newPassword')
+            .custom((value, { req }) => value !== req.body.currentPassword)
+            .withMessage('New password must be different from the current password'),
     ],
     validate,
     async (req, res) => {
