@@ -160,6 +160,8 @@ The project has no unit-test framework yet. These scripts exercise the real API 
 | `node scripts/verify-temp-password.js` | Temporary password on create, forced change, superadmin reset and its guards |
 | `node scripts/verify-employee-optional-fields.js` | Creating and editing employees with blank optional fields (gender, manager) |
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
+| `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
+| `node scripts/verify-user-password-hook.js` | Password hashing hook leaves unchanged passwords alone (talks to MongoDB directly, using a throwaway `ems_verify_*` database; no API needed) |
 
 Each script clears its own test data, but the login limits it triggers stay in Redis. Clear the `rl:*` keys (command above) before each run and after `verify-login-rate-limit.js`, which leaves your IP rate limited.
 

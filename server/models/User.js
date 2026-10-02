@@ -66,10 +66,11 @@ userSchema.statics.generateTempPassword = function () {
     return crypto.randomBytes(4).toString('hex') + 'A1';
 };
 
-// Hash password before saving
-userSchema.pre('save', async function (next) {
+// Hash password before saving. Promise-style hook: returning early must end it,
+// otherwise an unchanged password would be hashed again (a hash of the hash)
+userSchema.pre('save', async function () {
     if (!this.isModified('password')) {
-        next();
+        return;
     }
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
