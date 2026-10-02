@@ -5,6 +5,7 @@ import Leave from '../models/Leave.js';
 import Payroll from '../models/Payroll.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { getRedisClient } from '../config/redis.js';
+import { DASHBOARD_STATS_KEY } from '../middleware/cache.js';
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ const router = express.Router();
 router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
     try {
         const redisClient = getRedisClient();
-        const cacheKey = 'dashboard:stats';
+        const cacheKey = DASHBOARD_STATS_KEY;
         
         if (redisClient) {
             try {

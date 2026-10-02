@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import connectRedis from './config/redis.js';
 import cookieParser from 'cookie-parser';
+import { invalidateDashboardStats } from './middleware/cache.js';
 
 // Import Routes
 import authRoutes from './routes/auth.routes.js';
@@ -61,6 +62,9 @@ app.use(cookieParser());
 
 // Static files for uploads
 app.use('/uploads', express.static('uploads'));
+
+// Writes under these routes change the numbers on the dashboard
+app.use(['/api/employees', '/api/departments', '/api/attendance', '/api/leaves', '/api/payroll'], invalidateDashboardStats);
 
 // API Routes
 app.use('/api/auth', authRoutes);
