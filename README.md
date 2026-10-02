@@ -153,7 +153,14 @@ Self-registration at `/register` always creates an **Employee** account; it cann
 
 ## 🧪 Verification Scripts
 
-The project has no unit-test framework yet. These scripts exercise the real API end to end. Run them from `server/` with the API running on port 5000 and the demo data loaded:
+These scripts exercise the real API end to end. With the API running on port 5000 (`npm run dev`), MongoDB and Redis up, and the demo data loaded, run them all from `server/`:
+
+```bash
+npm test               # every script, with a pass/fail summary
+npm test -- leave      # only scripts whose name contains "leave"
+```
+
+`npm test` resets the login rate limits in Redis before each script (and at the end), runs `verify-login-rate-limit.js` last, prints the full output of any script that fails, and exits non-zero if one does. Each script can also be run on its own:
 
 | Script | What it checks |
 |--------|----------------|
@@ -167,7 +174,7 @@ The project has no unit-test framework yet. These scripts exercise the real API 
 | `node scripts/verify-security-fixes.js` | Upload access (login required, JD files only for their employee and HR roles), random upload names, the `/uploads` dev proxy, id validation and own-account guards |
 | `node scripts/verify-user-password-hook.js` | Password hashing hook leaves unchanged passwords alone (talks to MongoDB directly, using a throwaway `ems_verify_*` database; no API needed) |
 
-Each script clears its own test data, but the login limits it triggers stay in Redis. Clear the `rl:*` keys (command above) before each run and after `verify-login-rate-limit.js`, which leaves your IP rate limited.
+Each script clears its own test data. When running scripts one by one, clear the `rl:*` keys in Redis (command above) between runs and after `verify-login-rate-limit.js`, which leaves your IP rate limited; `npm test` does this for you.
 
 ## 🚢 Deployment Notes
 
