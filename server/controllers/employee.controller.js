@@ -357,25 +357,25 @@ export const deleteEmployee = async (req, res) => {
         const Payroll = (await import('../models/Payroll.js')).default;
         const Department = (await import('../models/Department.js')).default;
 
-        await Promise.all([
-            Employee.findByIdAndDelete(employeeId).session(session),
-            User.findOneAndDelete({ employee: employeeId }).session(session),
-            Attendance.deleteMany({ employee: employeeId }).session(session),
-            Leave.deleteMany({ employee: employeeId }).session(session),
-            Payroll.deleteMany({ employee: employeeId }).session(session),
-            Employee.updateMany(
-                { manager: employeeId },
-                { $unset: { manager: '' } }
-            ).session(session),
-            Employee.updateMany(
-                { supervisor: employeeId },
-                { $unset: { supervisor: '' } }
-            ).session(session),
-            Department.updateMany(
-                { manager: employeeId },
-                { $unset: { manager: '' } }
-            ).session(session),
-        ]);
+        // Run sequentially: MongoDB doesn't support parallel operations within
+        // one transaction (Promise.all here fails with NoSuchTransaction)
+        await Employee.findByIdAndDelete(employeeId).session(session);
+        await User.findOneAndDelete({ employee: employeeId }).session(session);
+        await Attendance.deleteMany({ employee: employeeId }).session(session);
+        await Leave.deleteMany({ employee: employeeId }).session(session);
+        await Payroll.deleteMany({ employee: employeeId }).session(session);
+        await Employee.updateMany(
+            { manager: employeeId },
+            { $unset: { manager: '' } }
+        ).session(session);
+        await Employee.updateMany(
+            { supervisor: employeeId },
+            { $unset: { supervisor: '' } }
+        ).session(session);
+        await Department.updateMany(
+            { manager: employeeId },
+            { $unset: { manager: '' } }
+        ).session(session);
 
         await session.commitTransaction();
         session.endSession();
