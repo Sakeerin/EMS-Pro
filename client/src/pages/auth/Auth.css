@@ -157,6 +157,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 16px;
+}
+
+.form-footer .checkbox-wrapper {
+    white-space: nowrap;
 }
 
 .checkbox-wrapper {
@@ -174,15 +179,10 @@
     accent-color: var(--primary);
 }
 
-.forgot-link {
-    font-size: 14px;
-    color: var(--primary);
-    font-weight: 500;
-    transition: color var(--transition-fast);
-}
-
-.forgot-link:hover {
-    color: var(--primary-dark);
+.forgot-hint {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    text-align: right;
 }
 
 .auth-submit {
@@ -211,28 +211,6 @@
     text-decoration: underline;
 }
 
-.demo-credentials {
-    margin-top: 20px;
-    padding: 16px;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
-    text-align: center;
-}
-
-.demo-credentials p {
-    font-size: 12px;
-    color: var(--text-tertiary);
-    margin-bottom: 8px;
-}
-
-.demo-credentials code {
-    font-size: 13px;
-    color: var(--primary);
-    background: rgba(99, 102, 241, 0.1);
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-}
-
 /* Form Select in Auth */
 .auth-form .form-select {
     padding-left: 48px;
@@ -245,6 +223,10 @@
 
     .auth-header h1 {
         font-size: 24px;
+    }
+
+    .forgot-hint {
+        text-align: left;
     }
 
     .form-footer {

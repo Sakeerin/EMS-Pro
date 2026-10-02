@@ -103,9 +103,9 @@ const Login = () => {
                             <input type="checkbox" />
                             <span>Remember me</span>
                         </label>
-                        <Link to="/forgot-password" className="forgot-link">
-                            Forgot password?
-                        </Link>
+                        <span className="forgot-hint">
+                            Forgot password? Ask your administrator to reset it.
+                        </span>
                     </div>
 
                     <motion.button
@@ -125,11 +125,6 @@ const Login = () => {
 
                 <div className="auth-footer">
                     <p>Don't have an account? <Link to="/register">Create one</Link></p>
-                </div>
-
-                <div className="demo-credentials">
-                    <p>Demo Credentials:</p>
-                    <code>admin@demo.com / password123</code>
                 </div>
             </motion.div>
         </div>
