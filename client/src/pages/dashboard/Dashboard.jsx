@@ -10,9 +10,10 @@ import {
 } from 'recharts';
 import { dashboardAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import EmployeeDashboard from './EmployeeDashboard';
 import './Dashboard.css';
 
-const Dashboard = () => {
+const AdminDashboard = () => {
     const { user, isHR } = useAuth();
     const fetchDashboardData = async () => {
         const [statsRes, activitiesRes] = await Promise.all([
@@ -284,6 +285,12 @@ const Dashboard = () => {
             </div>
         </motion.div>
     );
+};
+
+// Admin/HR roles see company-wide numbers; everyone else gets their own dashboard
+const Dashboard = () => {
+    const { isHR } = useAuth();
+    return isHR ? <AdminDashboard /> : <EmployeeDashboard />;
 };
 
 export default Dashboard;
