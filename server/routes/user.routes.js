@@ -355,11 +355,13 @@ router.put('/:id/link-employee',
 // @desc    Replace a user's password with a temporary one they must change at next login
 // @access  SuperAdmin only
 router.post('/:id/reset-password',
-    [param('id').isMongoId().withMessage('Invalid user ID')],
+    // Plain 24-hex only: isMongoId() also accepts 0x-prefixed strings that findById can't cast
+    [param('id').matches(/^[0-9a-fA-F]{24}$/).withMessage('Invalid user ID')],
     validate,
     async (req, res) => {
         try {
-            if (req.params.id === req.user._id.toString()) {
+            // ObjectId comparison, so an uppercase id can't bypass the own-account check
+            if (req.user._id.equals(req.params.id)) {
                 return res.status(400).json({
                     success: false,
                     message: 'Use Settings to change your own password'

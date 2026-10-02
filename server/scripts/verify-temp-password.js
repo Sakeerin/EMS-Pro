@@ -112,11 +112,25 @@ try {
     const own = await admin('POST', `/users/${superadminId}/reset-password`);
     check('7 own account rejected', own.status === 400, `status=${own.status} msg='${own.body.message}'`);
 
+    // 7b. The same guard holds when the id is written in uppercase hex
+    const upperId = superadminId.toUpperCase();
+    if (upperId === superadminId) {
+        check('7b own account rejected (uppercase id)', true, 'skipped: id has no hex letters');
+    } else {
+        const ownUpper = await admin('POST', `/users/${upperId}/reset-password`);
+        check('7b own account rejected (uppercase id)', ownUpper.status === 400, `status=${ownUpper.status}`);
+        if (ownUpper.status === 200 && ownUpper.body.data?.tempPassword) {
+            // Undo the accidental self-reset so the seed account keeps working
+            await admin('PUT', '/auth/password', { currentPassword: ownUpper.body.data.tempPassword, newPassword: SEED_PASSWORD });
+        }
+    }
+
     // 8. Malformed and unknown ids are client errors, not 500s
     const malformed = await admin('POST', '/users/not-an-id/reset-password');
+    const hexPrefixed = await admin('POST', `/users/0x${'0'.repeat(22)}/reset-password`);
     const unknown = await admin('POST', '/users/000000000000000000000000/reset-password');
-    check('8 malformed and unknown ids', malformed.status === 400 && unknown.status === 404,
-        `malformed=${malformed.status} unknown=${unknown.status}`);
+    check('8 malformed and unknown ids', malformed.status === 400 && hexPrefixed.status === 400 && unknown.status === 404,
+        `malformed=${malformed.status} 0x-prefixed=${hexPrefixed.status} unknown=${unknown.status}`);
 
     // 9. Only superadmin may reset
     const { api: hr } = await login('hr@company.com', SEED_PASSWORD);
