@@ -162,6 +162,7 @@ The project has no unit-test framework yet. These scripts exercise the real API 
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
+| `node scripts/verify-avatar-upload.js` | Only the employee themself or HR/admin roles can change an avatar; rejected uploads write no file |
 | `node scripts/verify-security-fixes.js` | Upload access (login required, JD files only for their employee and HR roles), random upload names, the `/uploads` dev proxy, id validation and own-account guards |
 | `node scripts/verify-user-password-hook.js` | Password hashing hook leaves unchanged passwords alone (talks to MongoDB directly, using a throwaway `ems_verify_*` database; no API needed) |
 

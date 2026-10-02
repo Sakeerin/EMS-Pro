@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, authorize, authorizeSelfOr } from '../middleware/auth.js';
 import { objectIdParam } from '../middleware/validators.js';
 import { uploadAvatar, uploadJD } from '../services/storage.service.js';
 import {
@@ -69,7 +69,16 @@ router.put('/:id',
 
 router.delete('/:id', protect, authorize('superadmin', 'admin'), deleteEmployee);
 
-router.post('/:id/avatar', protect, uploadAvatar.single('avatar'), uploadEmployeeAvatar);
+// The employee themself or HR/admin roles; checked before multer so a rejected
+// request never writes a file
+router.post('/:id/avatar',
+    protect,
+    [objectIdParam('id', 'Invalid employee ID')],
+    validate,
+    authorizeSelfOr('superadmin', 'admin', 'hr'),
+    uploadAvatar.single('avatar'),
+    uploadEmployeeAvatar
+);
 
 router.post('/:id/upload-jd', protect, authorize('superadmin', 'admin', 'hr'), uploadJD.single('file'), uploadEmployeeJD);
 

@@ -63,6 +63,19 @@ export const protect = async (req, res, next) => {
     }
 };
 
+// Allows the listed roles, or the employee that the route's :id refers to
+export const authorizeSelfOr = (...roles) => {
+    return (req, res, next) => {
+        if (roles.includes(req.user.role) || req.user.employee?.equals(req.params.id)) {
+            return next();
+        }
+        return res.status(403).json({
+            success: false,
+            message: 'Not authorized to change this employee'
+        });
+    };
+};
+
 // Role-based authorization
 export const authorize = (...roles) => {
     return (req, res, next) => {
