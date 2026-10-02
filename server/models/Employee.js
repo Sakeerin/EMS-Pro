@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
 
+// Forms send '' for an optional field left unselected. Store it as null so it
+// passes ObjectId casting and enum validation, and clears the value on update
+const emptyToNull = (value) => (value === '' ? null : value);
+
 const employeeSchema = new mongoose.Schema({
     employeeId: {
         type: String,
@@ -49,14 +53,16 @@ const employeeSchema = new mongoose.Schema({
     },
     manager: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee'
+        ref: 'Employee',
+        set: emptyToNull
     },
     dateOfBirth: {
         type: Date
     },
     gender: {
         type: String,
-        enum: ['male', 'female', 'other']
+        enum: ['male', 'female', 'other'],
+        set: emptyToNull
     },
     address: {
         street: String,
@@ -93,7 +99,8 @@ const employeeSchema = new mongoose.Schema({
     // Supervisor/Manager reference
     supervisor: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee'
+        ref: 'Employee',
+        set: emptyToNull
     },
     // Job Description file
     jobDescriptionFile: {
