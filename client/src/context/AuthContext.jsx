@@ -37,12 +37,6 @@ export const AuthProvider = ({ children }) => {
         return data;
     };
 
-    const register = async (userData) => {
-        const { data } = await api.post('/auth/register', userData);
-        setUser(data.data);
-        return data;
-    };
-
     const logout = async () => {
         try {
             await api.post('/auth/logout');
@@ -78,7 +72,6 @@ export const AuthProvider = ({ children }) => {
             user,
             loading,
             login,
-            register,
             logout,
             markPasswordChanged,
             isSuperAdmin,

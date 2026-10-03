@@ -48,19 +48,6 @@ const createLimiterStore = (prefix) => ({
     resetKey(key) { return this.run('resetKey', key); }
 });
 
-// Rate limiting for auth endpoints
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // limit each IP to 10 requests per windowMs
-    message: {
-        success: false,
-        message: 'Too many authentication attempts, please try again after 15 minutes'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    store: createLimiterStore('rl:auth:')
-});
-
 // Login brute-force protection. Only failed attempts count, so people signing
 // in successfully from a shared office IP never use up the limit.
 // Per account and IP: 5 failed attempts per 15 minutes
@@ -105,73 +92,6 @@ const validate = (req, res, next) => {
     }
     next();
 };
-
-// @route   POST /api/auth/register
-// @desc    Register new user (always creates as 'employee' role)
-// @access  Public
-router.post('/register',
-    authLimiter,
-    [
-        body('email')
-            .isEmail().withMessage('Please enter a valid email')
-            .normalizeEmail(),
-        body('password')
-            .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
-            .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-            .withMessage('Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'),
-    ],
-    validate,
-    async (req, res) => {
-        try {
-            const { email, password } = req.body;
-
-            // Check if user exists
-            const userExists = await User.findOne({ email });
-            if (userExists) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'User already exists'
-                });
-            }
-
-            // SECURITY: Always create with 'employee' role — role escalation must be done by SuperAdmin
-            const user = await User.create({
-                email,
-                password,
-                role: 'employee'
-            });
-
-            const token = generateToken(user._id);
-
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
-
-            res.status(201).json({
-                success: true,
-                data: {
-                    _id: user._id,
-                    email: user.email,
-                    role: user.role
-                }
-            });
-        } catch (error) {
-            if (error.code === 11000) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'User already exists'
-                });
-            }
-            res.status(500).json({
-                success: false,
-                message: 'Registration failed. Please try again.'
-            });
-        }
-    }
-);
 
 // @route   POST /api/auth/login
 // @desc    Login user

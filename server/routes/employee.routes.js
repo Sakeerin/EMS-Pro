@@ -33,9 +33,17 @@ const router = express.Router();
 
 router.get('/generate-id', protect, authorize('superadmin', 'admin', 'hr'), generateId);
 router.get('/supervisors', protect, authorize('superadmin', 'admin', 'hr'), getSupervisors);
-router.get('/', protect, getEmployees);
-router.get('/stats/overview', protect, getEmployeeStats);
-router.get('/:id', protect, getEmployeeById);
+// Employee records include salary, bank and family details: the list and stats
+// are for HR/admin roles, and an employee may read only their own record
+router.get('/', protect, authorize('superadmin', 'admin', 'hr'), getEmployees);
+router.get('/stats/overview', protect, authorize('superadmin', 'admin', 'hr'), getEmployeeStats);
+router.get('/:id',
+    protect,
+    [objectIdParam('id', 'Invalid employee ID')],
+    validate,
+    authorizeSelfOr('superadmin', 'admin', 'hr'),
+    getEmployeeById
+);
 
 router.post('/',
     protect,

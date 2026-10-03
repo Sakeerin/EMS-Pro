@@ -120,8 +120,9 @@ export const getSupervisors = async (req, res) => {
 // @desc    Get all employees with pagination, search, filter
 export const getEmployees = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        // Capped so one request can't pull the whole company
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100);
         const skip = (page - 1) * limit;
 
         let query = {};

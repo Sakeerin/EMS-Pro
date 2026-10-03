@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiBriefcase, FiMail, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
@@ -124,7 +124,7 @@ const Login = () => {
                 </form>
 
                 <div className="auth-footer">
-                    <p>Don't have an account? <Link to="/register">Create one</Link></p>
+                    <p>Don&apos;t have an account? Ask HR to add you.</p>
                 </div>
             </motion.div>
         </div>

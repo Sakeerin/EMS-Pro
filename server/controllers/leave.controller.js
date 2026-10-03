@@ -9,11 +9,13 @@ export const getLeaves = async (req, res) => {
 
         let query = {};
 
-        // If not admin/hr, only show own leaves
+        // If not admin/hr, only show own leaves; an account without an employee
+        // profile has none (it used to skip the filter and see everyone's)
         if (!['superadmin', 'admin', 'hr'].includes(req.user.role)) {
-            if (req.user.employee) {
-                query.employee = req.user.employee;
+            if (!req.user.employee) {
+                return res.json({ success: true, data: [] });
             }
+            query.employee = req.user.employee;
         }
 
         if (status) query.status = status;

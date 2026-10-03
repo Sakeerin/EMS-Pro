@@ -6,7 +6,6 @@ import Layout from './components/layout/Layout';
 
 // Pages
 import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
 import ChangePassword from './pages/auth/ChangePassword';
 import Dashboard from './pages/dashboard/Dashboard';
 import EmployeeList from './pages/employees/EmployeeList';
@@ -63,7 +62,6 @@ function App() {
         <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
             <Route path="/change-password" element={
                 <ProtectedRoute>
                     <ChangePassword />

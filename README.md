@@ -132,14 +132,15 @@ Then start the server and client as in step 5.
 
 ### First-time setup without demo data
 
-Self-registration at `/register` always creates an **Employee** account; it cannot create an admin. To bootstrap the first SuperAdmin:
+There is no self-registration: accounts are created by HR (adding an employee creates their account) or by a SuperAdmin on the Users page. To create the first SuperAdmin:
 
-1. Register at `/register` with the email you want to use.
-2. Promote that account in MongoDB:
+1. From `server/`, run:
    ```bash
-   docker exec ems-mongo mongosh employee_management --quiet --eval 'db.users.updateOne({ email: "you@example.com" }, { $set: { role: "superadmin" } })'
+   npm run create-superadmin -- you@example.com
    ```
-3. Sign in, create departments at `/departments`, then add employees at `/employees/new`.
+   It prints a temporary password once.
+2. Sign in with it; you'll be asked to choose a new password.
+3. Create departments at `/departments`, then add employees at `/employees/new`.
 
 ## 🔑 Accounts and Passwords
 
@@ -169,6 +170,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
+| `node scripts/verify-access-control.js` | Employees see only their own record (no list, stats or colleagues' salary/bank data), list size capped, self-registration closed, profile-less accounts see no leave requests |
 | `node scripts/verify-write-errors.js` | Employee and department forms get a 400 with the reason (invalid value, duplicate ID/email/name/code) instead of a 500 |
 | `node scripts/verify-avatar-upload.js` | Only the employee themself or HR/admin roles can change an avatar; rejected uploads write no file |
 | `node scripts/verify-security-fixes.js` | Upload access (login required, JD files only for their employee and HR roles), random upload names, the `/uploads` dev proxy, id validation and own-account guards |
