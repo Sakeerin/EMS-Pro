@@ -3,6 +3,9 @@ import Employee from '../models/Employee.js';
 import User from '../models/User.js';
 import { sendWriteError } from '../utils/writeErrors.js';
 
+// Employment statuses that may sign in; terminated and inactive employees can't
+const LOGIN_STATUSES = ['active', 'on_leave'];
+
 // Helper function to get Thai year
 const getThaiYear = () => {
     const currentYear = new Date().getFullYear();
@@ -257,7 +260,7 @@ export const createEmployee = async (req, res) => {
             password: tempPassword,
             role: 'employee',
             employee: employee._id,
-            isActive: true,
+            isActive: LOGIN_STATUSES.includes(employee.status),
             mustChangePassword: true
         });
         await user.save({ session });
@@ -296,6 +299,9 @@ export const updateEmployee = async (req, res) => {
         }
         
         const emailChanged = req.body.email && req.body.email !== employeeToUpdate.email;
+        // The edit form always sends status, so only an actual change touches the
+        // login; otherwise any edit would re-enable a manually deactivated account
+        const statusChanged = req.body.status && req.body.status !== employeeToUpdate.status;
 
         const employee = await Employee.findByIdAndUpdate(
             req.params.id,
@@ -307,6 +313,16 @@ export const updateEmployee = async (req, res) => {
             await User.findOneAndUpdate(
                 { employee: employee._id },
                 { email: req.body.email },
+                { session }
+            );
+        }
+
+        // Login follows employment status (protect checks isActive on every
+        // request, so this also ends open sessions)
+        if (statusChanged) {
+            await User.findOneAndUpdate(
+                { employee: employee._id },
+                { isActive: LOGIN_STATUSES.includes(employee.status) },
                 { session }
             );
         }

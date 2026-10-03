@@ -6,20 +6,30 @@ import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
+const HR_ROLES = ['superadmin', 'admin', 'hr'];
+
+// HR/admin roles may record attendance for any employee (corrections), via
+// body.employeeId; everyone else always records their own, whatever the body says
+const attendanceTargetId = (req) =>
+    req.body.employeeId && HR_ROLES.includes(req.user.role) ? req.body.employeeId : req.user.employee;
+
+const isObjectIdString = (value) => Boolean(value) && /^[0-9a-fA-F]{24}$/.test(String(value));
+
 // @route   POST /api/attendance/check-in
 // @desc    Check in for the day
 // @access  Private
 router.post('/check-in', protect, async (req, res) => {
     try {
-        const { employeeId, location, note } = req.body;
+        const { location, note } = req.body;
 
-        // Get employee from user or body
-        let employee;
-        if (employeeId) {
-            employee = await Employee.findById(employeeId);
-        } else if (req.user.employee) {
-            employee = await Employee.findById(req.user.employee);
+        const targetId = attendanceTargetId(req);
+        if (!isObjectIdString(targetId)) {
+            return res.status(targetId ? 400 : 404).json({
+                success: false,
+                message: targetId ? 'Invalid employee ID' : 'Employee not found'
+            });
         }
+        const employee = await Employee.findById(targetId);
 
         if (!employee) {
             return res.status(404).json({
@@ -87,14 +97,16 @@ router.post('/check-in', protect, async (req, res) => {
 // @access  Private
 router.post('/check-out', protect, async (req, res) => {
     try {
-        const { employeeId, location, note } = req.body;
+        const { location, note } = req.body;
 
-        let employee;
-        if (employeeId) {
-            employee = await Employee.findById(employeeId);
-        } else if (req.user.employee) {
-            employee = await Employee.findById(req.user.employee);
+        const targetId = attendanceTargetId(req);
+        if (!isObjectIdString(targetId)) {
+            return res.status(targetId ? 400 : 404).json({
+                success: false,
+                message: targetId ? 'Invalid employee ID' : 'Employee not found'
+            });
         }
+        const employee = await Employee.findById(targetId);
 
         if (!employee) {
             return res.status(404).json({

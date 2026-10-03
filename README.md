@@ -170,6 +170,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
+| `node scripts/verify-attendance-and-status.js` | Only HR/admin roles can record attendance for someone else; terminating or deactivating an employee blocks their login (and open sessions), reactivating allows it again |
 | `node scripts/verify-access-control.js` | Employees see only their own record (no list, stats or colleagues' salary/bank data), list size capped, self-registration closed, profile-less accounts see no leave requests |
 | `node scripts/verify-write-errors.js` | Employee and department forms get a 400 with the reason (invalid value, duplicate ID/email/name/code) instead of a 500 |
 | `node scripts/verify-avatar-upload.js` | Only the employee themself or HR/admin roles can change an avatar; rejected uploads write no file |
