@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { FiDollarSign, FiFileText, FiDownload, FiCheck } from 'react-icons/fi';
+import { FiDollarSign, FiFileText, FiPrinter, FiCheck } from 'react-icons/fi';
 import { payrollAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -15,6 +16,13 @@ const PERIOD_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 });
 
 const periodKey = (period) => `${period.year}-${period.month}`;
+
+const ALLOWANCES = [
+    ['housing', 'Housing Allowance'],
+    ['transport', 'Transport Allowance'],
+    ['meal', 'Meal Allowance'],
+    ['other', 'Other Allowance']
+];
 
 const PayrollPage = () => {
     const { isHR, isAdmin, user } = useAuth();
@@ -104,6 +112,23 @@ const PayrollPage = () => {
         } catch (error) {
             toast.error('Failed to load payslip');
         }
+    };
+
+    // While a payslip is open, printing (the button or Ctrl+P) prints just the
+    // payslip; see the print styles in Payroll.css
+    useEffect(() => {
+        if (!selectedPayroll) return undefined;
+        document.body.classList.add('payslip-open');
+        return () => document.body.classList.remove('payslip-open');
+    }, [selectedPayroll]);
+
+    // The browser's "Save as PDF" names the file after the page title
+    const printPayslip = () => {
+        const previousTitle = document.title;
+        const month = String(selectedPayroll.month).padStart(2, '0');
+        document.title = `Payslip ${selectedPayroll.employee?.employeeId || ''} ${selectedPayroll.year}-${month}`.replace(/\s+/g, ' ');
+        window.addEventListener('afterprint', () => { document.title = previousTitle; }, { once: true });
+        window.print();
     };
 
     const formatCurrency = (amount) => {
@@ -265,9 +290,9 @@ const PayrollPage = () => {
                 </div>
             </div>
 
-            {/* Payslip Modal */}
-            {selectedPayroll && (
-                <div className="modal-overlay" onClick={() => setSelectedPayroll(null)}>
+            {/* Payslip Modal: rendered on <body> so printing can hide the rest of the app */}
+            {selectedPayroll && createPortal(
+                <div className="modal-overlay payslip-overlay" onClick={() => setSelectedPayroll(null)}>
                     <motion.div
                         className="modal payslip-modal"
                         onClick={(e) => e.stopPropagation()}
@@ -282,6 +307,9 @@ const PayrollPage = () => {
                             <div className="payslip-header">
                                 <h2>Employee Management System</h2>
                                 <p>Payslip for {getMonthName(selectedPayroll.month)} {selectedPayroll.year}</p>
+                                {!['approved', 'paid'].includes(selectedPayroll.status) && (
+                                    <p className="payslip-draft">Draft (not final)</p>
+                                )}
                             </div>
 
                             <div className="payslip-employee">
@@ -297,6 +325,14 @@ const PayrollPage = () => {
                                     <span>Department</span>
                                     <span>{selectedPayroll.employee?.department?.name || '-'}</span>
                                 </div>
+                                <div className="payslip-row">
+                                    <span>Status</span>
+                                    <span>
+                                        {selectedPayroll.status === 'paid' && selectedPayroll.paymentDate
+                                            ? `Paid on ${new Date(selectedPayroll.paymentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                            : selectedPayroll.status.charAt(0).toUpperCase() + selectedPayroll.status.slice(1)}
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="payslip-section">
@@ -309,6 +345,12 @@ const PayrollPage = () => {
                                     <span>Overtime ({selectedPayroll.overtime?.hours} hrs)</span>
                                     <span>{formatCurrency(selectedPayroll.overtime?.amount)}</span>
                                 </div>
+                                {ALLOWANCES.filter(([key]) => selectedPayroll.allowances?.[key] > 0).map(([key, name]) => (
+                                    <div className="payslip-row" key={key}>
+                                        <span>{name}</span>
+                                        <span>{formatCurrency(selectedPayroll.allowances[key])}</span>
+                                    </div>
+                                ))}
                                 <div className="payslip-row">
                                     <span>Bonus</span>
                                     <span>{formatCurrency(selectedPayroll.bonus)}</span>
@@ -329,10 +371,22 @@ const PayrollPage = () => {
                                     <span>Social Security</span>
                                     <span className="text-danger">-{formatCurrency(selectedPayroll.deductions?.socialSecurity)}</span>
                                 </div>
+                                {selectedPayroll.deductions?.providentFund > 0 && (
+                                    <div className="payslip-row">
+                                        <span>Provident Fund</span>
+                                        <span className="text-danger">-{formatCurrency(selectedPayroll.deductions.providentFund)}</span>
+                                    </div>
+                                )}
                                 <div className="payslip-row">
                                     <span>Late Deduction</span>
                                     <span className="text-danger">-{formatCurrency(selectedPayroll.deductions?.lateDeduction)}</span>
                                 </div>
+                                {selectedPayroll.deductions?.other > 0 && (
+                                    <div className="payslip-row">
+                                        <span>Other Deductions</span>
+                                        <span className="text-danger">-{formatCurrency(selectedPayroll.deductions.other)}</span>
+                                    </div>
+                                )}
                                 <div className="payslip-row total">
                                     <span>Total Deductions</span>
                                     <span className="text-danger">-{formatCurrency(selectedPayroll.totalDeductions)}</span>
@@ -348,12 +402,13 @@ const PayrollPage = () => {
                             <button className="btn btn-secondary" onClick={() => setSelectedPayroll(null)}>
                                 Close
                             </button>
-                            <button className="btn btn-primary">
-                                <FiDownload /> Download PDF
+                            <button className="btn btn-primary" onClick={printPayslip}>
+                                <FiPrinter /> Print / Save PDF
                             </button>
                         </div>
                     </motion.div>
-                </div>
+                </div>,
+                document.body
             )}
         </motion.div>
     );
