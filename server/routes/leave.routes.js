@@ -36,10 +36,13 @@ router.post('/',
         body('type')
             .isIn(['annual', 'sick', 'personal', 'maternity', 'paternity', 'unpaid', 'other'])
             .withMessage('Invalid leave type'),
+        // Plain calendar dates: a time of day would shift the stored day
         body('startDate')
-            .isISO8601().withMessage('Valid start date is required'),
+            .matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('Start date must be a valid date (YYYY-MM-DD)').bail()
+            .isISO8601({ strict: true }).withMessage('Start date must be a valid date (YYYY-MM-DD)'),
         body('endDate')
-            .isISO8601().withMessage('Valid end date is required'),
+            .matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('End date must be a valid date (YYYY-MM-DD)').bail()
+            .isISO8601({ strict: true }).withMessage('End date must be a valid date (YYYY-MM-DD)'),
         body('reason')
             .notEmpty().withMessage('Reason is required')
             .trim(),

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Leave from '../models/Leave.js';
 import Employee from '../models/Employee.js';
+import { countBusinessDays, inYear } from '../utils/leaveDays.js';
 
 // Leave dates are stored as UTC midnight of the chosen day, so compare calendar
 // dates: leave starting today counts as started
@@ -8,6 +9,21 @@ const hasStarted = (leave) => leave.startDate.toISOString().slice(0, 10) <= new 
 
 // Approvers can't decide on their own requests
 const isOwnLeave = (req, leave) => Boolean(req.user.employee) && leave.employee.equals(req.user.employee);
+
+// Why a requested date range can't be accepted, or null. Quotas are yearly, so a
+// request stays within one calendar year, from last year to next year
+const leaveDateProblem = (start, end) => {
+    if (start > end) return 'Start date must be before or equal to end date';
+    const year = start.getUTCFullYear();
+    if (end.getUTCFullYear() !== year) {
+        return "A leave request can't span two calendar years. Submit one request for each year.";
+    }
+    const thisYear = new Date().getFullYear();
+    if (year < thisYear - 1 || year > thisYear + 1) {
+        return `Leave dates must be between ${thisYear - 1} and ${thisYear + 1}`;
+    }
+    return null;
+};
 
 // @desc    Get all leave requests (Admin/HR sees all, employees see their own)
 export const getLeaves = async (req, res) => {
@@ -86,18 +102,24 @@ export const getLeaveBalance = async (req, res) => {
             });
         }
 
+        // This year unless ?year= asks for another (e.g. to plan next year's leave)
+        const year = req.query.year === undefined ? new Date().getFullYear() : Number(req.query.year);
+        if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid year'
+            });
+        }
+
         const employee = await Employee.findById(req.user.employee);
 
-        // Calculate used leaves this year
-        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-        const endOfYear = new Date(new Date().getFullYear(), 11, 31);
-
+        // Leave approved in that year (a request never spans two years)
         const usedLeaves = await Leave.aggregate([
             {
                 $match: {
                     employee: employee._id,
                     status: 'approved',
-                    startDate: { $gte: startOfYear, $lte: endOfYear }
+                    startDate: inYear(year)
                 }
             },
             {
@@ -109,6 +131,7 @@ export const getLeaveBalance = async (req, res) => {
         ]);
 
         const balance = {
+            year,
             annual: {
                 total: employee.leaveBalance.annual,
                 used: usedLeaves.find(l => l._id === 'annual')?.totalDays || 0
@@ -141,21 +164,22 @@ export const getLeaveBalance = async (req, res) => {
 
 // @desc    Create leave request
 export const createLeaveRequest = async (req, res) => {
+    const { type, startDate, endDate, reason, employeeId } = req.body;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Checked first: keeping a request within one year also bounds the day count below
+    const dateProblem = leaveDateProblem(start, end);
+    if (dateProblem) {
+        return res.status(400).json({
+            success: false,
+            message: dateProblem
+        });
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-        const { type, startDate, endDate, reason, employeeId } = req.body;
-
-        // Validate date order
-        if (new Date(startDate) > new Date(endDate)) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(400).json({
-                success: false,
-                message: 'Start date must be before or equal to end date'
-            });
-        }
-
         let employee;
         if (employeeId && ['superadmin', 'admin', 'hr'].includes(req.user.role)) {
             employee = await Employee.findOneAndUpdate(
@@ -185,8 +209,8 @@ export const createLeaveRequest = async (req, res) => {
         const overlapping = await Leave.exists({
             employee: employee._id,
             status: { $in: ['pending', 'approved'] },
-            startDate: { $lte: new Date(endDate) },
-            endDate: { $gte: new Date(startDate) }
+            startDate: { $lte: end },
+            endDate: { $gte: start }
         }).session(session);
         if (overlapping) {
             await session.abortTransaction();
@@ -197,20 +221,7 @@ export const createLeaveRequest = async (req, res) => {
             });
         }
 
-        // Calculate business days
-        let businessDays = 0;
-        let currentDate = new Date(startDate);
-        currentDate.setHours(0, 0, 0, 0);
-        const end = new Date(endDate);
-        end.setHours(0, 0, 0, 0);
-        
-        while (currentDate <= end) {
-            const dayOfWeek = currentDate.getDay();
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                businessDays++;
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
+        const businessDays = countBusinessDays(start, end);
 
         if (businessDays === 0) {
             await session.abortTransaction();
@@ -221,17 +232,15 @@ export const createLeaveRequest = async (req, res) => {
             });
         }
 
-        // Check balance for constrained leave types
+        // Check balance for constrained leave types, against the quota of the
+        // year the leave is in
         if (['annual', 'sick', 'personal'].includes(type)) {
-            const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-            const endOfYear = new Date(new Date().getFullYear(), 11, 31);
-
             const usedLeaves = await Leave.aggregate([
                 {
                     $match: {
                         employee: employee._id,
                         status: { $in: ['approved', 'pending'] }, // include pending to prevent overdraft
-                        startDate: { $gte: startOfYear, $lte: endOfYear },
+                        startDate: inYear(start.getUTCFullYear()),
                         type: type
                     }
                 },
@@ -251,7 +260,7 @@ export const createLeaveRequest = async (req, res) => {
                 session.endSession();
                 return res.status(400).json({
                     success: false,
-                    message: `Insufficient ${type} leave balance. You have ${totalBalance - usedDays} days remaining.`
+                    message: `Insufficient ${type} leave balance. You have ${totalBalance - usedDays} days remaining in ${start.getUTCFullYear()}.`
                 });
             }
         }
@@ -259,8 +268,8 @@ export const createLeaveRequest = async (req, res) => {
         const leave = new Leave({
             employee: employee._id,
             type,
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
+            startDate: start,
+            endDate: end,
             reason
         });
         await leave.save({ session });

@@ -18,6 +18,9 @@ const LeavePage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState(hasProfile || !canApproveLeaves ? 'my' : 'all');
     const latestRequest = useRef(0);
+    // Same limits as the server: dates from last year to next year, and one
+    // request stays within a single calendar year
+    const thisYear = new Date().getFullYear();
     const [formData, setFormData] = useState({
         type: 'annual',
         startDate: '',
@@ -305,6 +308,8 @@ const LeavePage = () => {
                                         type="date"
                                         className="form-input"
                                         value={formData.startDate}
+                                        min={`${thisYear - 1}-01-01`}
+                                        max={`${thisYear + 1}-12-31`}
                                         onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                                         required
                                     />
@@ -315,6 +320,8 @@ const LeavePage = () => {
                                         type="date"
                                         className="form-input"
                                         value={formData.endDate}
+                                        min={formData.startDate || `${thisYear - 1}-01-01`}
+                                        max={formData.startDate ? `${formData.startDate.slice(0, 4)}-12-31` : `${thisYear + 1}-12-31`}
                                         onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                                         required
                                     />

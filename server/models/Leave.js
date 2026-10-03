@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { countBusinessDays } from '../utils/leaveDays.js';
 
 const leaveSchema = new mongoose.Schema({
     employee: {
@@ -57,23 +58,7 @@ const leaveSchema = new mongoose.Schema({
 // every new leave request
 leaveSchema.pre('validate', function (next) {
     if (this.startDate && this.endDate) {
-        let businessDays = 0;
-        let currentDate = new Date(this.startDate);
-        currentDate.setHours(0, 0, 0, 0); // Normalize time
-        
-        const endDate = new Date(this.endDate);
-        endDate.setHours(0, 0, 0, 0); // Normalize time
-        
-        while (currentDate <= endDate) {
-            const dayOfWeek = currentDate.getDay();
-            // Count if not Saturday (6) and not Sunday (0)
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                businessDays++;
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        this.days = businessDays;
+        this.days = countBusinessDays(this.startDate, this.endDate);
     }
     next();
 });
