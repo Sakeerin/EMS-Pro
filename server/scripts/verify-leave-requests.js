@@ -4,7 +4,10 @@
 //
 // Usage (from server/): node scripts/verify-leave-requests.js
 // API_URL defaults to http://localhost:5000/api. Uses the seed superadmin from
-// scripts/seed.js (2 logins in total). Dates are in 2026, the balance year.
+// scripts/seed.js (2 logins in total). Dates are weeks ahead of today within
+// one calendar year (scripts/lib/leaveTestDates.js).
+
+import { futureDay } from './lib/leaveTestDates.js';
 
 const API = process.env.API_URL || 'http://localhost:5000/api';
 
@@ -57,29 +60,32 @@ try {
         emp('POST', '/leaves', { type, startDate, endDate, reason: 'verify-leave-requests' });
 
     // 1. A Friday-to-Monday request is created and counts 2 business days
-    const friToMon = await request('annual', '2026-10-23', '2026-10-26');
+    const friToMon = await request('annual', futureDay(0, 4), futureDay(1, 0));
     check('1 create leave request', friToMon.status === 201 && friToMon.body.data?.days === 2 && friToMon.body.data?.status === 'pending',
         `status=${friToMon.status} days=${friToMon.body.data?.days} state=${friToMon.body.data?.status} msg='${friToMon.body.message || ''}'`);
 
-    // 2. A weekend-only request is rejected
-    const weekend = await request('annual', '2026-10-24', '2026-10-25');
-    check('2 weekend-only request rejected', weekend.status === 400, `status=${weekend.status} msg='${weekend.body.message || ''}'`);
+    // 2. A weekend-only request is rejected (a weekend clear of the request
+    //    above, so it isn't refused as an overlap instead)
+    const weekend = await request('annual', futureDay(2, 5), futureDay(2, 6));
+    check('2 weekend-only request rejected', weekend.status === 400 && /business day/i.test(weekend.body.message || ''),
+        `status=${weekend.status} msg='${weekend.body.message || ''}'`);
 
-    // 3. More days than the remaining balance (12 annual - 2 pending = 10) is rejected
-    const tooLong = await request('annual', '2026-11-02', '2026-11-18');
+    // 3. More days than the remaining balance (12 annual - 2 pending = 10) is
+    //    rejected: Monday of one week to Wednesday two weeks later is 13 days
+    const tooLong = await request('annual', futureDay(3, 0), futureDay(5, 2));
     check('3 over-balance request rejected', tooLong.status === 400 && /Insufficient annual leave balance/.test(tooLong.body.message || ''),
         `status=${tooLong.status} msg='${tooLong.body.message || ''}'`);
 
     // 4. Approving it, then the balance shows 2 annual days used
     const leaveId = friToMon.body.data?._id;
     const approved = leaveId ? await admin('PUT', `/leaves/${leaveId}/approve`) : { status: 0, body: {} };
-    const balance = (await emp('GET', '/leaves/balance')).body.data;
+    const balance = (await emp('GET', `/leaves/balance?year=${futureDay(0, 0).slice(0, 4)}`)).body.data;
     check('4 approve updates balance', approved.status === 200 && approved.body.data?.status === 'approved'
         && balance?.annual?.used === 2 && balance?.annual?.remaining === 10,
         `approve=${approved.status} state=${approved.body.data?.status} annual used=${balance?.annual?.used} remaining=${balance?.annual?.remaining}`);
 
     // 5. Rejecting a request
-    const sick = await request('sick', '2026-10-27', '2026-10-27');
+    const sick = await request('sick', futureDay(1, 1), futureDay(1, 1));
     const rejected = sick.body.data?._id
         ? await admin('PUT', `/leaves/${sick.body.data._id}/reject`, { reason: 'verify-leave-requests' })
         : { status: 0, body: {} };
@@ -87,7 +93,7 @@ try {
         `create=${sick.status} reject=${rejected.status} state=${rejected.body.data?.status}`);
 
     // 6. The employee cancelling their own pending request
-    const personal = await request('personal', '2026-10-28', '2026-10-28');
+    const personal = await request('personal', futureDay(1, 2), futureDay(1, 2));
     const cancelled = personal.body.data?._id
         ? await emp('DELETE', `/leaves/${personal.body.data._id}`)
         : { status: 0, body: {} };

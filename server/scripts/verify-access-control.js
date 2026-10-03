@@ -11,6 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import { futureDay } from './lib/leaveTestDates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -97,12 +98,14 @@ try {
     check('5 self-registration closed', register.status === 404, `status=${register.status}`);
 
     // 6. An account without an employee profile sees no one's leave requests
-    await a.api('POST', '/leaves', { type: 'annual', startDate: '2026-11-11', endDate: '2026-11-11', reason: 'verify-access-control' });
+    //    (with at least one request in the system to see)
+    const leaveDay = futureDay(1, 2);
+    const someLeave = await a.api('POST', '/leaves', { type: 'annual', startDate: leaveDay, endDate: leaveDay, reason: 'verify-access-control' });
     await admin('POST', '/users', { email: throwawayEmails[0], password: `Temp${stamp}aA1`, role: 'employee' });
     const noProfile = await signInFresh(throwawayEmails[0], `Temp${stamp}aA1`, `NoProfile${stamp}aA1`);
     const leaves = await noProfile('GET', '/leaves');
-    check('6 profile-less account sees no leave requests', leaves.status !== 200 || (leaves.body.data || []).length === 0,
-        `status=${leaves.status} leaves visible=${(leaves.body.data || []).length}`);
+    check('6 profile-less account sees no leave requests', someLeave.status === 201 && (leaves.status !== 200 || (leaves.body.data || []).length === 0),
+        `leave created=${someLeave.status} status=${leaves.status} leaves visible=${(leaves.body.data || []).length}`);
 } finally {
     for (const id of employeeIds) {
         const removed = await admin('DELETE', `/employees/${id}`);

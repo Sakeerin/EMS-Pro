@@ -4,8 +4,10 @@
 // Usage (from server/): node scripts/verify-leave-rules.js
 // API_URL defaults to http://localhost:5000/api. Uses the seed superadmin and
 // two throwaway employees (one promoted to HR); their leaves and accounts go
-// with them. Dates are in 2026, the balance year: Sep 28-29 is in the past,
-// November is in the future.
+// with them. Dates are worked out from today (scripts/lib/leaveTestDates.js):
+// a week that has passed, and weeks ahead within one calendar year.
+
+import { futureDay, pastDay } from './lib/leaveTestDates.js';
 
 const API = process.env.API_URL || 'http://localhost:5000/api';
 
@@ -61,18 +63,18 @@ try {
     const hr = await createEmployee('Hr', 'hr');
 
     // 1. The employee can cancel a pending request
-    const pending = await request(emp, '2026-11-02', '2026-11-02');
+    const pending = await request(emp, futureDay(0, 0), futureDay(0, 0));
     const cancelPending = await emp('DELETE', `/leaves/${pending.body.data?._id}`);
     check('1 owner cancels pending leave', cancelPending.status === 200, `create=${pending.status} cancel=${cancelPending.status}`);
 
     // 2. ...and an approved one that hasn't started yet
-    const future = await request(emp, '2026-11-04', '2026-11-04');
+    const future = await request(emp, futureDay(0, 2), futureDay(0, 2));
     await admin('PUT', `/leaves/${future.body.data?._id}/approve`);
     const cancelFuture = await emp('DELETE', `/leaves/${future.body.data?._id}`);
     check('2 owner cancels approved future leave', cancelFuture.status === 200, `cancel=${cancelFuture.status}`);
 
     // 3. ...but not approved leave that has already started, so days taken can't be refunded
-    const past = await request(emp, '2026-09-28', '2026-09-29');
+    const past = await request(emp, pastDay(0), pastDay(1));
     const pastId = past.body.data?._id;
     await admin('PUT', `/leaves/${pastId}/approve`);
     const cancelPast = await emp('DELETE', `/leaves/${pastId}`);
@@ -86,7 +88,7 @@ try {
         `cancel=${hrCancel.status} state=${await statusOf(emp, pastId)}`);
 
     // 5. HR can't approve or reject their own request; someone else can
-    const own = await request(hr, '2026-11-23', '2026-11-23');
+    const own = await request(hr, futureDay(3, 0), futureDay(3, 0));
     const ownId = own.body.data?._id;
     const selfApprove = await hr('PUT', `/leaves/${ownId}/approve`);
     const selfReject = await hr('PUT', `/leaves/${ownId}/reject`, { reason: 'self' });
@@ -95,11 +97,12 @@ try {
         `self approve=${selfApprove.status} self reject=${selfReject.status} superadmin approve=${otherApprove.status}`);
 
     // 6. Overlapping requests are refused; adjacent ones and ones replacing a cancelled request are fine
-    const first = await request(emp, '2026-11-16', '2026-11-18');
-    const overlap = await request(emp, '2026-11-17', '2026-11-19');
-    const adjacent = await request(emp, '2026-11-19', '2026-11-20');
+    // Monday-Wednesday, then Tuesday-Thursday, then Thursday-Friday of one week
+    const first = await request(emp, futureDay(2, 0), futureDay(2, 2));
+    const overlap = await request(emp, futureDay(2, 1), futureDay(2, 3));
+    const adjacent = await request(emp, futureDay(2, 3), futureDay(2, 4));
     await emp('DELETE', `/leaves/${first.body.data?._id}`);
-    const replacement = await request(emp, '2026-11-16', '2026-11-18');
+    const replacement = await request(emp, futureDay(2, 0), futureDay(2, 2));
     check('6 overlapping requests refused', first.status === 201 && overlap.status === 400 && adjacent.status === 201 && replacement.status === 201,
         `first=${first.status} overlap=${overlap.status} adjacent=${adjacent.status} after cancel=${replacement.status} msg='${overlap.body.message || ''}'`);
 } finally {
