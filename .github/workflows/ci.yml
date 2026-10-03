@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# The jobs only read the repository
+permissions:
+  contents: read
+
 # A newer push to the same branch or pull request replaces a run still going
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,18 +42,20 @@ jobs:
         working-directory: .
         run: |
           docker run -d --name ems-mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          # When a wait runs out, show MongoDB's own log so the cause is visible
+          fail() { echo "::error::$1"; docker logs --tail 50 ems-mongo 2>&1; exit 1; }
           for i in $(seq 1 30); do
             docker exec ems-mongo mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' >/dev/null 2>&1 && break
+            [ "$i" = 30 ] && fail "MongoDB did not start within 30 seconds"
             sleep 1
           done
-          docker exec ems-mongo mongosh --quiet --eval 'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
+          docker exec ems-mongo mongosh --quiet --eval 'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})' || fail "rs.initiate failed"
           for i in $(seq 1 30); do
             state=$(docker exec ems-mongo mongosh --quiet --eval 'rs.status().members[0].stateStr' 2>/dev/null || true)
             if [ "$state" = "PRIMARY" ]; then exit 0; fi
             sleep 1
           done
-          echo "MongoDB replica set did not become PRIMARY"
-          exit 1
+          fail "MongoDB replica set did not become PRIMARY within 30 seconds"
 
       - uses: actions/setup-node@v5
         with:

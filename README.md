@@ -176,7 +176,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 
 **CI:** GitHub Actions runs the same `npm test` (against MongoDB and Redis containers) and builds the client on every push and pull request to `main`; see `.github/workflows/ci.yml`.
 
-Each script can also be run on its own against the dev server (`npm run dev`) and dev database:
+Each script can also be run on its own against the dev server (`npm run dev`) and dev database. That needs the demo data loaded (step 4 above), because the scripts sign in with the seed accounts:
 
 | Script | What it checks |
 |--------|----------------|
