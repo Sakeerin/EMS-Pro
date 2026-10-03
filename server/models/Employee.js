@@ -150,7 +150,4 @@ employeeSchema.virtual('fullName').get(function () {
     return `${this.firstName} ${this.lastName}`;
 });
 
-// Index for search
-employeeSchema.index({ firstName: 'text', lastName: 'text', email: 'text', employeeId: 'text' });
-
 export default mongoose.model('Employee', employeeSchema);

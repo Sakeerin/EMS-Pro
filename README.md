@@ -15,7 +15,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 - Complete CRUD operations
 - Profile with photo upload
 - Department assignment
-- Advanced search & filtering
+- Search by any part of a name, email or employee ID (every word must match), plus department and status filters
 
 ### ⏰ Attendance Tracking
 - Real-time check-in/check-out
@@ -185,6 +185,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-attendance-and-status.js` | Only HR/admin roles can record attendance for someone else; terminating or deactivating an employee blocks their login (and open sessions), reactivating allows it again |
 | `node scripts/verify-access-control.js` | Employees see only their own record (no list, stats or colleagues' salary/bank data), list size capped, self-registration closed, profile-less accounts see no leave requests |
 | `node scripts/verify-query-params.js` | Malformed list filters (bad IDs, dates, page/limit/month/year, `?a[$op]=` objects, repeated keys) get a 400 instead of a 500, user search is literal text, and the parameters the app sends still work |
+| `node scripts/verify-employee-search.js` | Employee search finds part of a name, email or ID in any case, needs every word to match (any order), treats the text literally, and keeps the filters and totals |
 | `node scripts/verify-write-errors.js` | Employee and department forms get a 400 with the reason (invalid value, duplicate ID/email/name/code) instead of a 500 |
 | `node scripts/verify-avatar-upload.js` | Only the employee themself or HR/admin roles can change an avatar; rejected uploads write no file |
 | `node scripts/verify-security-fixes.js` | Upload access (login required, JD files only for their employee and HR roles), random upload names, the `/uploads` dev proxy, id validation and own-account guards |

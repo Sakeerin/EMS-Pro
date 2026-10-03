@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -18,15 +18,32 @@ const EmployeeList = () => {
     const [loading, setLoading] = useState(true);
     const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
-    const [filters, setFilters] = useState({
+    const filtersFromUrl = () => ({
         search: searchParams.get('search') || '',
         department: searchParams.get('department') || '',
         status: searchParams.get('status') || ''
     });
+    const [filters, setFilters] = useState(filtersFromUrl);
+    const latestRequest = useRef(0);
+
+    // Results follow the filters as you type; start again from the first page
+    const updateFilters = (changes) => {
+        setFilters(current => ({ ...current, ...changes }));
+        setPagination(current => ({ ...current, page: 1 }));
+    };
 
     useEffect(() => {
         fetchDepartments();
     }, []);
+
+    // The header search brings people here with ?search=...; follow the URL when
+    // it changes while this page is already open
+    useEffect(() => {
+        const fromUrl = filtersFromUrl();
+        if (Object.keys(fromUrl).some(key => fromUrl[key] !== filters[key])) {
+            updateFilters(fromUrl);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         fetchEmployees();
@@ -42,6 +59,9 @@ const EmployeeList = () => {
     };
 
     const fetchEmployees = async () => {
+        // Typing fires a request per keystroke and responses can arrive out of
+        // order; only the latest one may fill the table
+        const requestId = ++latestRequest.current;
         setLoading(true);
         try {
             const { data } = await employeeAPI.getAll({
@@ -51,12 +71,13 @@ const EmployeeList = () => {
                 department: filters.department,
                 status: filters.status
             });
+            if (requestId !== latestRequest.current) return;
             setEmployees(data.data);
             setPagination(data.pagination);
         } catch (error) {
-            toast.error('Failed to fetch employees');
+            if (requestId === latestRequest.current) toast.error('Failed to fetch employees');
         } finally {
-            setLoading(false);
+            if (requestId === latestRequest.current) setLoading(false);
         }
     };
 
@@ -104,14 +125,14 @@ const EmployeeList = () => {
                         type="text"
                         placeholder="Search by name, email, or ID..."
                         value={filters.search}
-                        onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                        onChange={(e) => updateFilters({ search: e.target.value })}
                     />
                 </form>
 
                 <select
                     className="form-input form-select filter-select"
                     value={filters.department}
-                    onChange={(e) => setFilters({ ...filters, department: e.target.value })}
+                    onChange={(e) => updateFilters({ department: e.target.value })}
                 >
                     <option value="">All Departments</option>
                     {departments.map(dept => (
@@ -122,7 +143,7 @@ const EmployeeList = () => {
                 <select
                     className="form-input form-select filter-select"
                     value={filters.status}
-                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                    onChange={(e) => updateFilters({ status: e.target.value })}
                 >
                     <option value="">All Status</option>
                     <option value="active">Active</option>

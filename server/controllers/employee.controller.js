@@ -2,9 +2,19 @@ import mongoose from 'mongoose';
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
 import { sendWriteError } from '../utils/writeErrors.js';
+import { escapeRegex } from '../utils/regex.js';
 
 // Employment statuses that may sign in; terminated and inactive employees can't
 const LOGIN_STATUSES = ['active', 'on_leave'];
+
+// Every word of the search must appear, anywhere and in any case, in the first
+// name, last name, email or employee ID: "Boon" finds Boonlert, "boon tang"
+// narrows it to Boonlert Tangsri
+const SEARCH_FIELDS = ['firstName', 'lastName', 'email', 'employeeId'];
+const searchConditions = (text) => text.trim().split(/\s+/).map((word) => {
+    const pattern = new RegExp(escapeRegex(word), 'i');
+    return { $or: SEARCH_FIELDS.map(field => ({ [field]: pattern })) };
+});
 
 // Helper function to get Thai year
 const getThaiYear = () => {
@@ -130,8 +140,8 @@ export const getEmployees = async (req, res) => {
         const skip = (page - 1) * limit;
 
         let query = {};
-        if (req.query.search) {
-            query.$text = { $search: req.query.search };
+        if (req.query.search?.trim()) {
+            query.$and = searchConditions(req.query.search);
         }
         if (req.query.department) {
             query.department = req.query.department;

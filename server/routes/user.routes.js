@@ -4,10 +4,7 @@ import User from '../models/User.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize, canManageUsers } from '../middleware/auth.js';
 import { objectIdParam, queryInt } from '../middleware/validators.js';
-
-// Search text is matched literally, so characters like ( or .* can't break or
-// widen the regular expression
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+import { escapeRegex } from '../utils/regex.js';
 
 const router = express.Router();
 
