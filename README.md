@@ -32,7 +32,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 ### 💰 Payroll
 - Salary management
 - Automatic payroll calculation for any of the last 24 months; only approved overtime is paid, so approve overtime before generating (the result says how many entries were still pending)
-- Draft → approved → paid workflow; before approval, `PUT /api/payroll/:id` can adjust the bonus, allowances, tax, provident fund and other deductions, notes and payment method (totals are recalculated); nobody changes, approves or pays their own payroll
+- Draft → approved → paid workflow; before approval, admins can adjust the bonus, allowances, tax, provident fund and other deductions, notes and payment method from the Payroll page (Adjust button, or `PUT /api/payroll/:id`), with totals recalculated; nobody changes, approves or pays their own payroll
 - Payslips itemise every allowance and deduction and can be printed or saved as PDF from the browser (drafts are marked "not final")
 
 ### 📊 Dashboard

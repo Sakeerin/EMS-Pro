@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { FiDollarSign, FiFileText, FiPrinter, FiCheck } from 'react-icons/fi';
+import { FiDollarSign, FiFileText, FiPrinter, FiCheck, FiEdit2 } from 'react-icons/fi';
 import { payrollAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
+import PayrollEditModal from './PayrollEditModal';
 import './Payroll.css';
 
 // The current month and the 23 before it, newest first
@@ -32,6 +33,7 @@ const PayrollPage = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(isHR ? 'all' : 'my');
     const [selectedPayroll, setSelectedPayroll] = useState(null);
+    const [editingPayroll, setEditingPayroll] = useState(null);
     const [generating, setGenerating] = useState(false);
     const [period, setPeriod] = useState(PERIOD_OPTIONS[0]);
     const latestRequest = useRef(0);
@@ -261,7 +263,16 @@ const PayrollPage = () => {
                                                 >
                                                     <FiFileText />
                                                 </button>
-                                                {/* No approving or paying your own payroll (the server refuses it too) */}
+                                                {/* No changing, approving or paying your own payroll (the server refuses it too) */}
+                                                {isAdmin && !isOwnPayroll(payroll) && ['draft', 'pending'].includes(payroll.status) && (
+                                                    <button
+                                                        onClick={() => setEditingPayroll(payroll)}
+                                                        className="btn btn-ghost btn-sm btn-icon"
+                                                        title="Adjust"
+                                                    >
+                                                        <FiEdit2 />
+                                                    </button>
+                                                )}
                                                 {isAdmin && !isOwnPayroll(payroll) && payroll.status === 'draft' && (
                                                     <button
                                                         onClick={() => handleApprove(payroll._id)}
@@ -289,6 +300,20 @@ const PayrollPage = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Adjust a draft: bonus, allowances, tax and other deductions */}
+            {editingPayroll && (
+                <PayrollEditModal
+                    payroll={editingPayroll}
+                    formatCurrency={formatCurrency}
+                    periodLabel={`${getMonthName(editingPayroll.month)} ${editingPayroll.year}`}
+                    onClose={() => setEditingPayroll(null)}
+                    onDone={() => {
+                        setEditingPayroll(null);
+                        fetchPayrolls();
+                    }}
+                />
+            )}
 
             {/* Payslip Modal: rendered on <body> so printing can hide the rest of the app */}
             {selectedPayroll && createPortal(

@@ -105,6 +105,61 @@
     color: var(--warning) !important;
 }
 
+/* Adjusting a draft payroll */
+.payroll-edit-modal {
+    max-width: 640px;
+}
+
+.payroll-edit-modal form {
+    display: contents;
+}
+
+.payroll-edit-fixed {
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+.payroll-edit-fixed span {
+    color: var(--text-tertiary);
+}
+
+.payroll-edit-section {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+}
+
+.payroll-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 16px;
+}
+
+.payroll-edit-totals {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 16px;
+    margin-top: 8px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    font-size: 14px;
+}
+
+@media (max-width: 600px) {
+    .payroll-edit-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Printing an open payslip ("Print / Save PDF" or Ctrl+P): only the payslip,
    on a plain white page whatever the theme. The payslip-open class is on
    <body> only while a payslip is shown, so other pages print as before */
