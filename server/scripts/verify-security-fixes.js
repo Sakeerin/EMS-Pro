@@ -3,7 +3,9 @@
 //
 // Usage (from server/): node scripts/verify-security-fixes.js
 // API_URL defaults to http://localhost:5000/api, CLIENT_URL to
-// http://localhost:5173. Uses the seed superadmin and creates throwaway
+// http://localhost:5173. npm test sets VERIFY_DEV_PROXY=off: it runs its own
+// API, which the dev server doesn't proxy to, so check 5 is skipped there.
+// Uses the seed superadmin and creates throwaway
 // employees, files and a throwaway superadmin, all removed at the end (the
 // superadmin through MongoDB, since the API only deactivates users).
 
@@ -128,9 +130,12 @@ try {
     check('4 random upload names', RANDOM_NAME.test(path.basename(avatarUrl)) && RANDOM_NAME.test(fileName),
         `avatar=${path.basename(avatarUrl)} jd=${fileName}`);
 
-    // 5. The Vite dev server forwards /uploads to the API (skipped if it isn't running)
-    const viaClient = await ownerClient.get(CLIENT + jdUrl).catch(() => null);
-    if (viaClient === null) {
+    // 5. The Vite dev server forwards /uploads to the API (skipped if it isn't
+    //    running, or under npm test, whose API the dev server doesn't proxy to)
+    const viaClient = process.env.VERIFY_DEV_PROXY === 'off' ? null : await ownerClient.get(CLIENT + jdUrl).catch(() => null);
+    if (process.env.VERIFY_DEV_PROXY === 'off') {
+        console.log('SKIP  5 /uploads through the dev server (npm test runs its own API, which the dev server does not proxy to)');
+    } else if (viaClient === null) {
         console.log(`SKIP  5 /uploads through the dev server (${CLIENT} not reachable)`);
     } else {
         check('5 /uploads through the dev server', viaClient.status === 200 && viaClient.text.startsWith('%PDF'),
