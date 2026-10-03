@@ -1,22 +1,30 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
 // Layout
 import Layout from './components/layout/Layout';
 
-// Pages
+// Pages. Login is the first screen signed-out visitors see, so it ships in the
+// main bundle; every other page is downloaded on its first visit
 import Login from './pages/auth/Login';
-import ChangePassword from './pages/auth/ChangePassword';
-import Dashboard from './pages/dashboard/Dashboard';
-import EmployeeList from './pages/employees/EmployeeList';
-import EmployeeForm from './pages/employees/EmployeeForm';
-import EmployeeDetail from './pages/employees/EmployeeDetail';
-import DepartmentList from './pages/departments/DepartmentList';
-import AttendancePage from './pages/attendance/AttendancePage';
-import LeavePage from './pages/leaves/LeavePage';
-import PayrollPage from './pages/payroll/PayrollPage';
-import Settings from './pages/settings/Settings';
-import UserList from './pages/users/UserList';
+const ChangePassword = lazy(() => import('./pages/auth/ChangePassword'));
+const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
+const EmployeeList = lazy(() => import('./pages/employees/EmployeeList'));
+const EmployeeForm = lazy(() => import('./pages/employees/EmployeeForm'));
+const EmployeeDetail = lazy(() => import('./pages/employees/EmployeeDetail'));
+const DepartmentList = lazy(() => import('./pages/departments/DepartmentList'));
+const AttendancePage = lazy(() => import('./pages/attendance/AttendancePage'));
+const LeavePage = lazy(() => import('./pages/leaves/LeavePage'));
+const PayrollPage = lazy(() => import('./pages/payroll/PayrollPage'));
+const Settings = lazy(() => import('./pages/settings/Settings'));
+const UserList = lazy(() => import('./pages/users/UserList'));
+
+const FullPageSpinner = () => (
+    <div className="loading-overlay">
+        <div className="loading-spinner"></div>
+    </div>
+);
 
 // Protected Route Component
 const ProtectedRoute = ({ children, roles }) => {
@@ -24,11 +32,7 @@ const ProtectedRoute = ({ children, roles }) => {
     const location = useLocation();
 
     if (loading) {
-        return (
-            <div className="loading-overlay">
-                <div className="loading-spinner"></div>
-            </div>
-        );
+        return <FullPageSpinner />;
     }
 
     if (!isAuthenticated) {
@@ -51,80 +55,80 @@ function App() {
     const { loading } = useAuth();
 
     if (loading) {
-        return (
-            <div className="loading-overlay">
-                <div className="loading-spinner"></div>
-            </div>
-        );
+        return <FullPageSpinner />;
     }
 
+    // Pages inside the layout have their own fallback (see Layout), so this one
+    // only shows for pages outside it, like /change-password
     return (
-        <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/change-password" element={
-                <ProtectedRoute>
-                    <ChangePassword />
-                </ProtectedRoute>
-            } />
-
-            {/* Protected Routes */}
-            <Route path="/" element={
-                <ProtectedRoute>
-                    <Layout />
-                </ProtectedRoute>
-            }>
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                <Route path="dashboard" element={<Dashboard />} />
-
-                {/* User Management - SuperAdmin only */}
-                <Route path="users" element={
-                    <ProtectedRoute roles={['superadmin']}>
-                        <UserList />
+        <Suspense fallback={<FullPageSpinner />}>
+            <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/change-password" element={
+                    <ProtectedRoute>
+                        <ChangePassword />
                     </ProtectedRoute>
                 } />
 
-                {/* Employee Routes */}
-                <Route path="employees" element={
-                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
-                        <EmployeeList />
+                {/* Protected Routes */}
+                <Route path="/" element={
+                    <ProtectedRoute>
+                        <Layout />
                     </ProtectedRoute>
-                } />
-                <Route path="employees/new" element={
-                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
-                        <EmployeeForm />
-                    </ProtectedRoute>
-                } />
-                <Route path="employees/:id" element={<EmployeeDetail />} />
-                <Route path="employees/:id/edit" element={
-                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
-                        <EmployeeForm />
-                    </ProtectedRoute>
-                } />
+                }>
+                    <Route index element={<Navigate to="/dashboard" replace />} />
+                    <Route path="dashboard" element={<Dashboard />} />
 
-                {/* Department Routes */}
-                <Route path="departments" element={
-                    <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
-                        <DepartmentList />
-                    </ProtectedRoute>
-                } />
+                    {/* User Management - SuperAdmin only */}
+                    <Route path="users" element={
+                        <ProtectedRoute roles={['superadmin']}>
+                            <UserList />
+                        </ProtectedRoute>
+                    } />
 
-                {/* Attendance */}
-                <Route path="attendance" element={<AttendancePage />} />
+                    {/* Employee Routes */}
+                    <Route path="employees" element={
+                        <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
+                            <EmployeeList />
+                        </ProtectedRoute>
+                    } />
+                    <Route path="employees/new" element={
+                        <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
+                            <EmployeeForm />
+                        </ProtectedRoute>
+                    } />
+                    <Route path="employees/:id" element={<EmployeeDetail />} />
+                    <Route path="employees/:id/edit" element={
+                        <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
+                            <EmployeeForm />
+                        </ProtectedRoute>
+                    } />
 
-                {/* Leave */}
-                <Route path="leaves" element={<LeavePage />} />
+                    {/* Department Routes */}
+                    <Route path="departments" element={
+                        <ProtectedRoute roles={['superadmin', 'admin', 'hr']}>
+                            <DepartmentList />
+                        </ProtectedRoute>
+                    } />
 
-                {/* Payroll */}
-                <Route path="payroll" element={<PayrollPage />} />
+                    {/* Attendance */}
+                    <Route path="attendance" element={<AttendancePage />} />
 
-                {/* Settings */}
-                <Route path="settings" element={<Settings />} />
-            </Route>
+                    {/* Leave */}
+                    <Route path="leaves" element={<LeavePage />} />
 
-            {/* 404 */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+                    {/* Payroll */}
+                    <Route path="payroll" element={<PayrollPage />} />
+
+                    {/* Settings */}
+                    <Route path="settings" element={<Settings />} />
+                </Route>
+
+                {/* 404 */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+        </Suspense>
     );
 }
 

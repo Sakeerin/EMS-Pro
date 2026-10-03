@@ -122,6 +122,12 @@ cd server && npm run dev    # API on http://localhost:5000/api
 cd client && npm run dev    # app on http://localhost:5173 (proxies /api to port 5000)
 ```
 
+To try a production build locally (pages are split into separate files that load on first visit):
+
+```bash
+cd client && npm run build && npm run preview    # http://localhost:4173, also proxies /api to port 5000
+```
+
 ### Day to day
 
 ```bash
@@ -186,6 +192,7 @@ Each script clears its own test data. When running scripts one by one, clear the
 - **Behind a reverse proxy** (nginx, a load balancer, etc.), set `TRUST_PROXY` to the number of proxy hops (usually `1`) or the proxy's address/subnet. Otherwise every user appears to come from the proxy's IP and they all share one login limit. Leave it unset when there's no proxy: trusting `X-Forwarded-For` without one lets clients spoof their IP.
 - Set `NODE_ENV=production` so auth cookies are sent with `Secure`, and use a strong, unique `JWT_SECRET`.
 - Uploaded files (`/uploads/...`) are served by the API and require the login cookie; job description files are further limited to their employee and HR/admin roles. Route both `/api` and `/uploads` to the API on the same site as the frontend (the Vite dev server does this for you), or avatars and JD links won't load.
+- The client build splits each page into its own file under `assets/`, with a content hash in the name. Serve `index.html` with `Cache-Control: no-cache` (the hashed files can be cached for a long time) and keep the previous build's `assets/` around for a while after a deploy if you can. A tab opened before a deploy that asks for a page file that no longer exists reloads itself once to pick up the new build.
 - Point `REDIS_URL` at your Redis instance so rate limits are shared between server instances.
 - Attendance saved before overtime approval was introduced keeps its old hours (lunch not deducted) and has no approval status, so its overtime is never paid. Generate payroll for those months before upgrading, or adjust them by hand.
 - Existing accounts that were created by a SuperAdmin on the Users page are flagged to change their password, so they are sent to `/change-password` at their next request. Employees created before temporary passwords were introduced never received one; reset them from the Users page.

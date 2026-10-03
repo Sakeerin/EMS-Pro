@@ -8,6 +8,21 @@ import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import './styles/index.css'
 
+// After a deploy, a tab opened earlier asks for page files from the old build,
+// which no longer exist; reload once to pick up the new build. At most once
+// every 10 seconds, so a missing file or a down server can't cause a reload loop
+window.addEventListener('vite:preloadError', (event) => {
+    try {
+        const lastReload = Number(sessionStorage.getItem('chunkReloadAt')) || 0
+        if (Date.now() - lastReload < 10000) return
+        sessionStorage.setItem('chunkReloadAt', String(Date.now()))
+    } catch {
+        return // no storage to guard the reload with
+    }
+    event.preventDefault()
+    window.location.reload()
+})
+
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {

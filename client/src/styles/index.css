@@ -692,6 +692,13 @@ img {
   background: rgba(15, 23, 42, 0.8);
 }
 
+/* While a page's code downloads, inside the layout */
+.page-loading {
+  display: flex;
+  justify-content: center;
+  padding: 80px 0;
+}
+
 /* ===== Skeleton Loading ===== */
 .skeleton {
   background: linear-gradient(
