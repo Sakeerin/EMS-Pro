@@ -12,6 +12,7 @@ const LeavePage = () => {
     const [balance, setBalance] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState('my');
     const [formData, setFormData] = useState({
         type: 'annual',
@@ -42,6 +43,7 @@ const LeavePage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setSubmitting(true);
         try {
             await leaveAPI.create(formData);
             toast.success('Leave request submitted');
@@ -50,6 +52,8 @@ const LeavePage = () => {
             fetchData();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to submit leave request');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -208,7 +212,8 @@ const LeavePage = () => {
                                         </td>
                                         {activeTab === 'all' && (
                                             <td>
-                                                {leave.status === 'pending' && (
+                                                {/* No approving or rejecting your own request (the server refuses it too) */}
+                                                {leave.status === 'pending' && leave.employee?._id !== user?.employee?._id && (
                                                     <div className="flex gap-2">
                                                         <button
                                                             onClick={() => handleApprove(leave._id)}
@@ -299,8 +304,8 @@ const LeavePage = () => {
                                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn btn-primary">
-                                    Submit Request
+                                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                    {submitting ? 'Submitting...' : 'Submit Request'}
                                 </button>
                             </div>
                         </form>

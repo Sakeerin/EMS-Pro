@@ -2,6 +2,13 @@ import mongoose from 'mongoose';
 import Leave from '../models/Leave.js';
 import Employee from '../models/Employee.js';
 
+// Leave dates are stored as UTC midnight of the chosen day, so compare calendar
+// dates: leave starting today counts as started
+const hasStarted = (leave) => leave.startDate.toISOString().slice(0, 10) <= new Date().toLocaleDateString('en-CA');
+
+// Approvers can't decide on their own requests
+const isOwnLeave = (req, leave) => Boolean(req.user.employee) && leave.employee.equals(req.user.employee);
+
 // @desc    Get all leave requests (Admin/HR sees all, employees see their own)
 export const getLeaves = async (req, res) => {
     try {
@@ -173,6 +180,23 @@ export const createLeaveRequest = async (req, res) => {
             });
         }
 
+        // Refuse dates that overlap a request already pending or approved (also
+        // stops a double-submitted form from charging the balance twice)
+        const overlapping = await Leave.exists({
+            employee: employee._id,
+            status: { $in: ['pending', 'approved'] },
+            startDate: { $lte: new Date(endDate) },
+            endDate: { $gte: new Date(startDate) }
+        }).session(session);
+        if (overlapping) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+                success: false,
+                message: 'You already have a leave request that overlaps these dates'
+            });
+        }
+
         // Calculate business days
         let businessDays = 0;
         let currentDate = new Date(startDate);
@@ -277,6 +301,13 @@ export const approveLeaveRequest = async (req, res) => {
             });
         }
 
+        if (isOwnLeave(req, leave)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You cannot approve or reject your own leave request'
+            });
+        }
+
         leave.status = 'approved';
         leave.approvedBy = req.user._id;
         leave.approvedAt = new Date();
@@ -312,6 +343,13 @@ export const rejectLeaveRequest = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Leave request is not pending'
+            });
+        }
+
+        if (isOwnLeave(req, leave)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You cannot approve or reject your own leave request'
             });
         }
 
@@ -354,11 +392,21 @@ export const cancelLeaveRequest = async (req, res) => {
             });
         }
 
-        // Check ownership unless admin
-        if (!['superadmin', 'admin'].includes(req.user.role) && leave.employee.toString() !== req.user.employee?.toString()) {
+        // HR/admin roles can cancel any leave (corrections); employees only their own
+        const isHR = ['superadmin', 'admin', 'hr'].includes(req.user.role);
+        if (!isHR && leave.employee.toString() !== req.user.employee?.toString()) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to cancel this leave'
+            });
+        }
+
+        // Once approved leave has started the days are taken, so cancelling it
+        // would refund them; employees need HR for that
+        if (!isHR && leave.status === 'approved' && hasStarted(leave)) {
+            return res.status(403).json({
+                success: false,
+                message: 'This leave has already started. Ask HR to cancel it.'
             });
         }
 
