@@ -1,5 +1,7 @@
 # Employee Management System - MERN Stack
 
+[![CI](https://github.com/Sakeerin/EMS-Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/Sakeerin/EMS-Pro/actions/workflows/ci.yml)
+
 A modern, comprehensive Employee Management System built with MongoDB, Express.js, React, and Node.js.
 
 ## ✨ Features
@@ -163,14 +165,18 @@ There is no self-registration: accounts are created by HR (adding an employee cr
 
 ## 🧪 Verification Scripts
 
-These scripts exercise the real API end to end. With the API running on port 5000 (`npm run dev`), MongoDB and Redis up, and the demo data loaded, run them all from `server/`:
+These scripts exercise the real API end to end. With MongoDB and Redis running, run them all from `server/`; the dev server doesn't need to be running:
 
 ```bash
 npm test               # every script, with a pass/fail summary
 npm test -- leave      # only scripts whose name contains "leave"
 ```
 
-`npm test` resets the login rate limits in Redis before each script (and at the end), runs `verify-login-rate-limit.js` last, prints the full output of any script that fails, and exits non-zero if one does. Each script can also be run on its own:
+`npm test` never touches your dev data. It creates a test database (`employee_management_test`, next to the one in `MONGODB_URI`) and uses Redis database 15, seeds the demo data, starts its own API on port 5055, runs the scripts, then stops the API and deletes the test data. Override the settings with `TEST_MONGODB_URI` (its database name must end in `_test`), `TEST_REDIS_URL` and `TEST_PORT`. It resets the login rate limits before each script, runs `verify-login-rate-limit.js` last, prints the output of any script that fails plus the end of the test API's log, and exits 0 when all pass, 1 when one fails, 2 when the test environment can't be set up.
+
+**CI:** GitHub Actions runs the same `npm test` (against MongoDB and Redis containers) and builds the client on every push and pull request to `main`; see `.github/workflows/ci.yml`.
+
+Each script can also be run on its own against the dev server (`npm run dev`) and dev database:
 
 | Script | What it checks |
 |--------|----------------|
@@ -184,6 +190,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-leave-balance.js` | Leave balance reports pending days per type and takes them off what remains (the same number new requests are checked against); rejected and cancelled days come back |
 | `node scripts/verify-leave-dates.js` | Leave quotas per year of the request (and `?year=` on the balance), 31 December counted, no request across two years or outside last year..next year, YYYY-MM-DD dates only, huge ranges refused at once |
 | `node scripts/verify-leave-test-dates.js` | The date helper the leave scripts use (`scripts/lib/leaveTestDates.js`) picks valid leave dates on every day of the year: future weeks within one calendar year, a past week that has begun (no API needed) |
+| `node scripts/verify-test-env.js` | How `npm test` derives its test database, Redis database and port from the dev settings, and that only `*_test` databases are accepted (no API needed) |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
 | `node scripts/verify-overtime.js` | Lunch hour deducted from long days, overtime pending until an HR role approves it (not their own), payroll pays approved overtime only (writes test attendance through MongoDB; skips the payroll check if January 2001 already has payroll) |
 | `node scripts/verify-payslip-access.js` | Employees open only their own payslips and only once approved or paid (draft figures stay hidden); HR and admin roles open any (writes test payroll through MongoDB) |
