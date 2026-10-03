@@ -176,6 +176,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-temp-password.js` | Temporary password on create, forced change, superadmin reset and its guards |
 | `node scripts/verify-employee-optional-fields.js` | Creating and editing employees with blank optional fields (gender, manager) |
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
+| `node scripts/verify-attendance-trend.js` | Dashboard attendance trend is labelled with the last 7 days in the server's time zone, ending today, with each day's count under its own label (run on the same machine or time zone as the API) |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-rules.js` | Leave rules: employees cancel pending or not-yet-started approved leave (HR can cancel any), no approving or rejecting your own request, no overlapping requests |
 | `node scripts/verify-leave-dates.js` | Leave quotas per year of the request (and `?year=` on the balance), 31 December counted, no request across two years or outside last year..next year, YYYY-MM-DD dates only, huge ranges refused at once |

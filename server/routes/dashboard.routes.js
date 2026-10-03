@@ -9,6 +9,11 @@ import { DASHBOARD_STATS_KEY } from '../middleware/cache.js';
 
 const router = express.Router();
 
+// Attendance dates are midnight in the server's time zone, so trend days are
+// grouped and labelled in that zone (in UTC every bar landed on the day before)
+const SERVER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const localDateLabel = (date) => date.toLocaleDateString('en-CA'); // YYYY-MM-DD
+
 // @route   GET /api/dashboard/stats
 // @desc    Get dashboard statistics
 // @access  Private (Admin, HR)
@@ -118,7 +123,7 @@ router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req
                 },
                 {
                     $group: {
-                        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+                        _id: { $dateToString: { format: '%Y-%m-%d', date: '$date', timezone: SERVER_TIME_ZONE } },
                         present: { $sum: 1 }
                     }
                 },
@@ -169,7 +174,7 @@ router.get('/stats', protect, authorize('superadmin', 'admin', 'hr'), async (req
         for (let i = 6; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(d.getDate() - i);
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = localDateLabel(d);
             last7Days.push({
                 date: dateStr,
                 present: trendMap.get(dateStr) || 0
