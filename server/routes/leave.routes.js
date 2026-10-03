@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { protect, authorize } from '../middleware/auth.js';
+import { queryDate } from '../middleware/validators.js';
 import {
     getLeaves,
     getMyLeaves,
@@ -26,7 +27,7 @@ const validate = (req, res, next) => {
 
 const router = express.Router();
 
-router.get('/', protect, getLeaves);
+router.get('/', protect, [queryDate('startDate'), queryDate('endDate')], validate, getLeaves);
 router.get('/my', protect, getMyLeaves);
 router.get('/balance', protect, getLeaveBalance);
 

@@ -4,7 +4,7 @@ import Attendance from '../models/Attendance.js';
 import { BUSINESS_RULES } from '../config/constants.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize } from '../middleware/auth.js';
-import { objectIdParam } from '../middleware/validators.js';
+import { objectIdParam, queryDate, queryInt, queryObjectId } from '../middleware/validators.js';
 
 // Validation middleware helper
 const validate = (req, res, next) => {
@@ -171,7 +171,7 @@ router.post('/check-out', protect, async (req, res) => {
 // @route   GET /api/attendance/my
 // @desc    Get my attendance records
 // @access  Private
-router.get('/my', protect, async (req, res) => {
+router.get('/my', protect, [queryDate('startDate'), queryDate('endDate')], validate, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
 
@@ -205,9 +205,10 @@ router.get('/my', protect, async (req, res) => {
             data: attendance
         });
     } catch (error) {
+        console.error('attendance failed:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to load attendance'
         });
     }
 });
@@ -256,10 +257,15 @@ router.get('/today', protect, async (req, res) => {
 // @route   GET /api/attendance/report
 // @desc    Get attendance report for all employees
 // @access  Private (Admin, HR, Manager)
-router.get('/report', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
+router.get('/report',
+    protect,
+    authorize('superadmin', 'admin', 'hr'),
+    [queryDate('startDate'), queryDate('endDate'), queryObjectId('department'), queryInt('page', 1), queryInt('limit', 1, 200)],
+    validate,
+    async (req, res) => {
     try {
         const { startDate, endDate, department, page = 1, limit = 50 } = req.query;
-        const pageNum = parseInt(page);
+        const pageNum = parseInt(page) || 1;
         const limitNum = Math.min(parseInt(limit) || 50, 200); // Cap at 200
         const skip = (pageNum - 1) * limitNum;
 

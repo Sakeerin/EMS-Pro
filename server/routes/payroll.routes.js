@@ -5,7 +5,7 @@ import Payroll from '../models/Payroll.js';
 import Employee from '../models/Employee.js';
 import Attendance from '../models/Attendance.js';
 import { protect, authorize } from '../middleware/auth.js';
-import { objectIdParam } from '../middleware/validators.js';
+import { objectIdParam, queryInt } from '../middleware/validators.js';
 
 // What an admin may adjust on a payroll before it's approved; everything else
 // (base salary, approved overtime, social security, late deductions and the
@@ -63,7 +63,12 @@ const router = express.Router();
 // @route   GET /api/payroll
 // @desc    Get all payroll records
 // @access  Private (Admin, HR)
-router.get('/', protect, authorize('superadmin', 'admin', 'hr'), async (req, res) => {
+router.get('/',
+    protect,
+    authorize('superadmin', 'admin', 'hr'),
+    [queryInt('month', 1, 12), queryInt('year', 2000, 2100)],
+    validate,
+    async (req, res) => {
     try {
         const { month, year, status } = req.query;
 
@@ -81,9 +86,10 @@ router.get('/', protect, authorize('superadmin', 'admin', 'hr'), async (req, res
             data: payrolls
         });
     } catch (error) {
+        console.error('payroll failed:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to load payroll'
         });
     }
 });

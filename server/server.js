@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import { invalidateDashboardStats } from './middleware/cache.js';
 import { protect } from './middleware/auth.js';
 import { authorizeJobDescription } from './middleware/uploads.js';
+import { stringQueryOnly } from './middleware/validators.js';
 
 // Import Routes
 import authRoutes from './routes/auth.routes.js';
@@ -70,6 +71,9 @@ app.use('/uploads/jd', protect, authorizeJobDescription, express.static('uploads
 
 // Writes under these routes change the numbers on the dashboard
 app.use(['/api/employees', '/api/departments', '/api/attendance', '/api/leaves', '/api/payroll'], invalidateDashboardStats);
+
+// No objects or arrays in query strings (they'd reach Mongo filters as operators)
+app.use('/api', stringQueryOnly);
 
 // API Routes
 app.use('/api/auth', authRoutes);

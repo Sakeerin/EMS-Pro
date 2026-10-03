@@ -113,9 +113,10 @@ export const getSupervisors = async (req, res) => {
             data: supervisors
         });
     } catch (error) {
+        console.error('supervisors failed:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to load supervisors'
         });
     }
 };
@@ -158,9 +159,10 @@ export const getEmployees = async (req, res) => {
             }
         });
     } catch (error) {
+        console.error('employees failed:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to load employees'
         });
     }
 };

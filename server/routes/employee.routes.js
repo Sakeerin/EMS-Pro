@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { protect, authorize, authorizeSelfOr } from '../middleware/auth.js';
-import { objectIdParam } from '../middleware/validators.js';
+import { objectIdParam, queryObjectId } from '../middleware/validators.js';
 import { uploadAvatar, uploadJD } from '../services/storage.service.js';
 import {
     generateId,
@@ -32,10 +32,10 @@ const validate = (req, res, next) => {
 const router = express.Router();
 
 router.get('/generate-id', protect, authorize('superadmin', 'admin', 'hr'), generateId);
-router.get('/supervisors', protect, authorize('superadmin', 'admin', 'hr'), getSupervisors);
+router.get('/supervisors', protect, authorize('superadmin', 'admin', 'hr'), [queryObjectId('department')], validate, getSupervisors);
 // Employee records include salary, bank and family details: the list and stats
 // are for HR/admin roles, and an employee may read only their own record
-router.get('/', protect, authorize('superadmin', 'admin', 'hr'), getEmployees);
+router.get('/', protect, authorize('superadmin', 'admin', 'hr'), [queryObjectId('department')], validate, getEmployees);
 router.get('/stats/overview', protect, authorize('superadmin', 'admin', 'hr'), getEmployeeStats);
 router.get('/:id',
     protect,

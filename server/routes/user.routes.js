@@ -3,7 +3,11 @@ import { body, query, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize, canManageUsers } from '../middleware/auth.js';
-import { objectIdParam } from '../middleware/validators.js';
+import { objectIdParam, queryInt } from '../middleware/validators.js';
+
+// Search text is matched literally, so characters like ( or .* can't break or
+// widen the regular expression
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const router = express.Router();
 
@@ -54,15 +58,20 @@ router.get('/employees/unlinked', async (req, res) => {
 // @route   GET /api/users
 // @desc    Get all users with pagination and filtering
 // @access  SuperAdmin only
-router.get('/', async (req, res) => {
+router.get('/',
+    [queryInt('page', 1), queryInt('limit', 1, 100)],
+    validate,
+    async (req, res) => {
     try {
-        const { page = 1, limit = 10, search, role, status } = req.query;
+        const { search, role, status } = req.query;
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
 
         // Build query
         const query = {};
 
         if (search) {
-            query.email = { $regex: search, $options: 'i' };
+            query.email = { $regex: escapeRegex(search), $options: 'i' };
         }
 
         if (role) {
@@ -79,14 +88,14 @@ router.get('/', async (req, res) => {
             .populate('employee', 'firstName lastName employeeId position')
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
-            .limit(parseInt(limit));
+            .limit(limit);
 
         res.json({
             success: true,
             data: users,
             pagination: {
                 total,
-                page: parseInt(page),
+                page,
                 pages: Math.ceil(total / limit)
             }
         });
