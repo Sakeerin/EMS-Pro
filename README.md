@@ -51,7 +51,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 22+ (the version CI tests on)
 - Docker, to run MongoDB and Redis locally (or a MongoDB Atlas cluster)
 
 Commands below are for a bash shell (macOS/Linux, or Git Bash on Windows).
