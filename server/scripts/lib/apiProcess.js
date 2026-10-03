@@ -49,7 +49,10 @@ export const startApi = ({ cwd, env, maxLines = 200 }) => {
 export const waitForHealth = async (apiUrl, { timeoutMs = 30000, hasExited = () => false } = {}) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline && !hasExited()) {
-        const status = await fetch(`${apiUrl}/health`).then((res) => res.status).catch(() => null);
+        // Each try is capped, so a server that accepts but never answers can't hold the wait
+        const status = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(2000) })
+            .then((res) => res.status)
+            .catch(() => null);
         if (status === 200) return true;
         await new Promise((resolve) => setTimeout(resolve, 500));
     }

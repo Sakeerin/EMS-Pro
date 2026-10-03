@@ -1,13 +1,15 @@
 // Checks the helpers that derive npm test's isolated settings from the dev
 // ones (scripts/lib/testEnv.js): the test database keeps the connection's
 // hosts, credentials and options and only changes the database name, the
-// test Redis keeps host and credentials and uses database 15, and only
-// databases named *_test count as test databases.
+// test Redis keeps host and credentials and uses database 15, only databases
+// named *_test count as test databases, malformed URLs are refused without
+// repeating them, and a test Redis that would flush db 0 or the dev
+// database is refused.
 //
 // Usage (from server/): node scripts/verify-test-env.js
 // Needs no API or database.
 
-import { databaseName, isTestDatabaseName, testMongoUri, testRedisUrl } from './lib/testEnv.js';
+import { databaseName, isSafeTestRedis, isTestDatabaseName, redisDatabase, testMongoUri, testRedisUrl } from './lib/testEnv.js';
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -58,6 +60,33 @@ table('4 test Redis URL', (url) => testRedisUrl(url), [
 let message = '';
 try { testMongoUri('postgres://admin:hunter2@db/app'); } catch (err) { message = err.message; }
 check('5 non-MongoDB URI refused', message !== '' && !message.includes('hunter2'), `message='${message}'`);
+
+// 6. A malformed Redis URL is refused without echoing it (or its password)
+const thrown = [];
+for (const fn of [() => testRedisUrl('redis//:hunter2@cache:6379'), () => redisDatabase('redis//:hunter2@cache:6379')]) {
+    try { fn(); thrown.push('(no error)'); } catch (err) { thrown.push(`${err.message} ${err.input ?? ''}`); }
+}
+check('6 malformed Redis URL refused quietly', thrown.every((text) => text !== '(no error)' && !text.includes('hunter2')),
+    thrown.map((text) => `'${text.trim()}'`).join(' / '));
+
+// 7. Which logical database a Redis URL uses (0 when it names none)
+table('7 Redis database number', (url) => redisDatabase(url), [
+    ['redis://localhost:6379', 0],
+    ['redis://localhost:6379/', 0],
+    ['redis://localhost:6379/0', 0],
+    ['redis://localhost:6379/15', 15],
+    ['rediss://:pw@cache:6380/3', 3]
+]);
+
+// 8. npm test flushes its Redis database, so never db 0 or the dev server's database
+table('8 safe test Redis', ([testUrl, devUrl]) => isSafeTestRedis(testUrl, devUrl), [
+    [['redis://localhost:6379/15', 'redis://localhost:6379'], true],
+    [['redis://localhost:6379', 'redis://localhost:6379'], false],
+    [['redis://localhost:6379/0', 'redis://other:6379/2'], false],
+    [['redis://localhost:6379/2', 'redis://localhost:6379/2'], false],
+    [['redis://localhost:6379/2', 'redis://other-host:6379/2'], true],
+    [['redis://localhost:6379/15', 'not a url'], true]
+]);
 
 console.log('---');
 console.log(failures === 0 ? 'all checks passed' : `${failures} check(s) failed`);

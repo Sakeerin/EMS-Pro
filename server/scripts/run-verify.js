@@ -8,7 +8,8 @@
 // Needs MongoDB (replica set) and Redis running. Settings come from .env;
 // override them with TEST_MONGODB_URI, TEST_REDIS_URL and TEST_PORT.
 // Exits 0 when every script passed, 1 when one failed, 2 when the test
-// environment couldn't be set up, 130/143 when interrupted (Ctrl+C / SIGTERM).
+// environment couldn't be set up (or the test API stopped mid-run), 130/143
+// when interrupted (Ctrl+C / SIGTERM).
 
 import { spawn } from 'child_process';
 import fs from 'fs';
@@ -17,7 +18,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { createClient } from 'redis';
-import { TEST_PORT, databaseName, isTestDatabaseName, testMongoUri, testRedisUrl } from './lib/testEnv.js';
+import { TEST_PORT, databaseName, isSafeTestRedis, isTestDatabaseName, testMongoUri, testRedisUrl } from './lib/testEnv.js';
 import { isPortFree, startApi, waitForHealth } from './lib/apiProcess.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,18 +96,42 @@ const runNode = (file, env, timeoutMs) => new Promise((resolve) => {
     });
 });
 
+// Reads a setting through fn and reports a bad value by the variable's name
+// only: connection strings can hold passwords
+const fromSetting = (name, fn, problem) => {
+    try {
+        return fn();
+    } catch {
+        throw new SetupError(`${name} ${problem}`);
+    }
+};
+
 const settings = () => {
     if (!process.env.TEST_MONGODB_URI && !process.env.MONGODB_URI) {
         throw new SetupError('Set MONGODB_URI in server/.env (or TEST_MONGODB_URI) so the test database can be found.');
     }
-    const mongoUri = process.env.TEST_MONGODB_URI || testMongoUri(process.env.MONGODB_URI);
-    const dbName = databaseName(mongoUri);
+    const mongoVar = process.env.TEST_MONGODB_URI ? 'TEST_MONGODB_URI' : 'MONGODB_URI';
+    const { mongoUri, dbName } = fromSetting(mongoVar, () => {
+        const uri = process.env.TEST_MONGODB_URI || testMongoUri(process.env.MONGODB_URI);
+        return { mongoUri: uri, dbName: databaseName(uri) };
+    }, 'is not a MongoDB connection string');
     if (!isTestDatabaseName(dbName)) {
         throw new SetupError(`Refusing to use database "${dbName}": the test database name must end in _test, because seeding deletes everything in it.`);
     }
-    const redisUrl = process.env.TEST_REDIS_URL || testRedisUrl(process.env.REDIS_URL || 'redis://localhost:6379');
+
+    const devRedisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const redisVar = process.env.TEST_REDIS_URL ? 'TEST_REDIS_URL' : 'REDIS_URL';
+    const { redisUrl, redisLabel } = fromSetting(redisVar, () => {
+        const url = process.env.TEST_REDIS_URL || testRedisUrl(devRedisUrl);
+        const { host, pathname } = new URL(url);
+        return { redisUrl: url, redisLabel: `${host}${pathname}` };
+    }, 'is not a valid Redis URL');
+    if (!isSafeTestRedis(redisUrl, devRedisUrl)) {
+        throw new SetupError(`Refusing to use Redis ${redisLabel} for tests: npm test empties its Redis database at the start and end, so it can't be database 0 or the one REDIS_URL uses. Set TEST_REDIS_URL to another database, e.g. redis://localhost:6379/15.`);
+    }
+
     const port = Number(process.env.TEST_PORT) || TEST_PORT;
-    return { mongoUri, dbName, redisUrl, port, apiUrl: `http://localhost:${port}/api` };
+    return { mongoUri, mongoVar, dbName, redisUrl, redisVar, redisLabel, port, apiUrl: `http://localhost:${port}/api` };
 };
 
 const filters = process.argv.slice(2);
@@ -119,8 +144,7 @@ let exitCode = 2;
 try {
     if (scripts.length === 0) throw new SetupError(`No verify scripts match: ${filters.join(', ')}`);
 
-    const { mongoUri, dbName, redisUrl, port, apiUrl } = settings();
-    const redisLabel = (() => { const url = new URL(redisUrl); return `${url.host}${url.pathname}`; })();
+    const { mongoUri, mongoVar, dbName, redisUrl, redisVar, redisLabel, port, apiUrl } = settings();
     const env = {
         ...process.env,
         MONGODB_URI: mongoUri,
@@ -132,17 +156,19 @@ try {
     };
 
     // Preflight: MongoDB, Redis and the port. The connections are kept for
-    // clean-up only once they're open, so a server that's down fails fast
+    // clean-up only once they're open, so a server that's down fails fast.
+    // The drivers' own reasons (refused, wrong password, no such database)
+    // don't include passwords, so they're passed on
     const connection = mongoose.createConnection(mongoUri, { serverSelectionTimeoutMS: 5000 });
-    await connection.asPromise().catch(async () => {
+    await connection.asPromise().catch(async (err) => {
         await connection.close().catch(() => {});
-        throw new SetupError('MongoDB is not reachable. Start it first (docker start ems-mongo) and check MONGODB_URI.');
+        throw new SetupError(`Can't connect to MongoDB: ${err.message}. Check that it's running (docker start ems-mongo) and that ${mongoVar} is right.`);
     });
     mongo = connection;
     const client = createClient({ url: redisUrl, socket: { connectTimeout: 3000, reconnectStrategy: false } });
     client.on('error', () => {});
-    await client.connect().catch(() => {
-        throw new SetupError(`Redis is not reachable at ${redisLabel}. Start it first (docker start ems-redis).`);
+    await client.connect().catch((err) => {
+        throw new SetupError(`Can't connect to Redis at ${redisLabel}: ${err.message}. Check that it's running (docker start ems-redis) and that ${redisVar} is right.`);
     });
     redis = client;
     if (!(await isPortFree(port))) {
@@ -176,8 +202,16 @@ try {
     };
 
     const results = [];
+    let apiStoppedBefore = null;
     for (const name of scripts) {
         stopIfInterrupted();
+        // An API that has died would fail every remaining script with the same
+        // log, so stop once with one message instead
+        if (api.hasExited() || !(await waitForHealth(apiUrl, { timeoutMs: 5000, hasExited: api.hasExited }))) {
+            stopIfInterrupted();
+            apiStoppedBefore = name;
+            break;
+        }
         await clearRateLimits();
         process.stdout.write(`${name.padEnd(42)}`);
         const run = await runNode(path.join(__dirname, name), env, 5 * 60 * 1000);
@@ -205,6 +239,10 @@ try {
         ? `${scriptCount} passed (${totalChecks} checks)`
         : `${failedScripts.length} of ${scriptCount} failed: ${failedScripts.map((result) => result.name).join(', ')}`);
     exitCode = failedScripts.length === 0 ? 0 : 1;
+    if (apiStoppedBefore) {
+        const skipped = scripts.length - results.length;
+        throw new SetupError(`The test API stopped before ${apiStoppedBefore}, so it and the ${skipped - 1} script(s) after it were skipped. Its log:\n${indent(api.logTail())}`);
+    }
 } catch (error) {
     // After an interrupt, errors from the stopped API or closing connections are expected
     if (!interrupted) {

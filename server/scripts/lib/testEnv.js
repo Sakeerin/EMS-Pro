@@ -30,9 +30,35 @@ export const databaseName = (uri) => decodeURIComponent(parseMongoUri(uri).datab
 // whose name says they're for tests may be used
 export const isTestDatabaseName = (name) => /_test$/.test(name);
 
+const parseRedisUrl = (value) => {
+    try {
+        return new URL(value);
+    } catch {
+        // URL errors carry the input, password included, so it isn't passed on
+        throw new Error('Not a valid Redis URL');
+    }
+};
+
 // The same Redis server and credentials, on another logical database
 export const testRedisUrl = (baseUrl, db = TEST_REDIS_DB) => {
-    const url = new URL(baseUrl);
+    const url = parseRedisUrl(baseUrl);
     url.pathname = `/${db}`;
     return url.toString();
+};
+
+// The logical database a Redis URL selects (0 when it names none)
+export const redisDatabase = (value) => Number(parseRedisUrl(value).pathname.slice(1)) || 0;
+
+// npm test empties its Redis database at the start and end, so it must not be
+// database 0 (where data lives by default) or the dev server's database
+export const isSafeTestRedis = (testUrl, devUrl) => {
+    const testDb = redisDatabase(testUrl);
+    if (testDb === 0) return false;
+    let dev;
+    try {
+        dev = new URL(devUrl);
+    } catch {
+        return true;
+    }
+    return !(parseRedisUrl(testUrl).host === dev.host && testDb === (Number(dev.pathname.slice(1)) || 0));
 };
