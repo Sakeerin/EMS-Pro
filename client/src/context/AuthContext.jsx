@@ -31,8 +31,9 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
     };
 
-    const login = async (email, password) => {
-        const { data } = await api.post('/auth/login', { email, password });
+    // rememberMe keeps the sign-in after the browser closes (see POST /auth/login)
+    const login = async (email, password, rememberMe = false) => {
+        const { data } = await api.post('/auth/login', { email, password, rememberMe });
         setUser(data.data);
         return data;
     };

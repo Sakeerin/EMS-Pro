@@ -100,7 +100,7 @@ Then edit `server/.env`:
 |----------|----------|-------------------|-------|
 | `MONGODB_URI` | yes | `mongodb://localhost:27017/employee_management?replicaSet=rs0` | For Atlas, use the `mongodb+srv://` string from Atlas |
 | `JWT_SECRET` | yes | — | Generate one: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
-| `JWT_EXPIRE` | no | `7d` | Token lifetime |
+| `JWT_EXPIRE` | no | `7d` | How long a "Remember me" sign-in lasts (others end when the browser closes, at most 12 hours) |
 | `PORT` | no | `5000` | API port |
 | `NODE_ENV` | no | `development` | Use `production` in production (secure cookies) |
 | `CLIENT_URL` | no | `http://localhost:5173` | Allowed CORS origin |
@@ -154,6 +154,7 @@ There is no self-registration: accounts are created by HR (adding an employee cr
 
 - **New employees:** adding an employee also creates their user account with a random temporary password. It is shown **once**, in a dialog, to whoever created the employee, and only its hash is stored. Copy it and give it to the employee.
 - **Lost or forgotten passwords:** a SuperAdmin can reset any other account from the **Users** page. The new temporary password is shown once in the same dialog. To change your own password, use **Settings**.
+- **Remember me:** ticked, you stay signed in on that device for `JWT_EXPIRE` (7 days by default). Unticked, the sign-in ends when the browser closes and lasts at most 12 hours.
 - **First sign-in:** an account on a temporary password is sent to `/change-password` and can't use any other part of the app (or the API) until it sets a new password.
 - **Login rate limits:** 5 failed attempts per account per IP, and 50 failed attempts per IP across all accounts, per 15 minutes. Successful logins don't count. To clear the limits during development:
   ```bash
@@ -175,6 +176,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 |--------|----------------|
 | `node scripts/verify-temp-password.js` | Temporary password on create, forced change, superadmin reset and its guards |
 | `node scripts/verify-employee-optional-fields.js` | Creating and editing employees with blank optional fields (gender, manager) |
+| `node scripts/verify-remember-me.js` | "Remember me" keeps the login cookie for the token's lifetime; otherwise a session cookie with a token of at most 12 hours |
 | `node scripts/verify-login-rate-limit.js` | Login limits: only failures count, per account+IP and per IP |
 | `node scripts/verify-attendance-trend.js` | Dashboard attendance trend is labelled with the last 7 days in the server's time zone, ending today, with each day's count under its own label (run on the same machine or time zone as the API) |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |

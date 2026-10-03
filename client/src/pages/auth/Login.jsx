@@ -9,7 +9,7 @@ import './Auth.css';
 const Login = () => {
     const navigate = useNavigate();
     const { login, isAuthenticated } = useAuth();
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [formData, setFormData] = useState({ email: '', password: '', rememberMe: false });
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -23,7 +23,7 @@ const Login = () => {
         setLoading(true);
 
         try {
-            await login(formData.email, formData.password);
+            await login(formData.email, formData.password, formData.rememberMe);
             toast.success('Welcome back!');
             navigate('/dashboard');
         } catch (error) {
@@ -100,8 +100,14 @@ const Login = () => {
 
                     <div className="form-footer">
                         <label className="checkbox-wrapper">
-                            <input type="checkbox" />
-                            <span>Remember me</span>
+                            <input
+                                type="checkbox"
+                                checked={formData.rememberMe}
+                                onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
+                            />
+                            <span title="Stay signed in on this device. Otherwise you're signed out when the browser closes.">
+                                Remember me
+                            </span>
                         </label>
                         <span className="forgot-hint">
                             Forgot password? Ask your administrator to reset it.

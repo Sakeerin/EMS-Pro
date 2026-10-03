@@ -3,11 +3,15 @@ import { body, validationResult } from 'express-validator';
 import rateLimit, { MemoryStore, ipKeyGenerator } from 'express-rate-limit';
 import User from '../models/User.js';
 import Employee from '../models/Employee.js';
+import jwt from 'jsonwebtoken';
 import { protect, generateToken } from '../middleware/auth.js';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient } from '../config/redis.js';
 
 const router = express.Router();
+
+// Token lifetime for sign-ins without "Remember me"
+const SESSION_TOKEN_LIFETIME = '12h';
 
 // Rate limit store that uses Redis while it is connected and memory otherwise.
 // The store is picked on every request because rateLimit() calls init() at
@@ -105,11 +109,14 @@ router.post('/login',
             .normalizeEmail(),
         body('password')
             .notEmpty().withMessage('Password is required'),
+        body('rememberMe')
+            .optional()
+            .isBoolean({ strict: true }).withMessage('rememberMe must be true or false'),
     ],
     validate,
     async (req, res) => {
         try {
-            const { email, password } = req.body;
+            const { email, password, rememberMe } = req.body;
 
             // Check user
             const user = await User.findOne({ email }).select('+password').populate('employee');
@@ -141,14 +148,20 @@ router.post('/login',
             user.lastLogin = new Date();
             await user.save({ validateBeforeSave: false });
 
-            const token = generateToken(user._id);
-
-            res.cookie('token', token, {
+            // "Remember me": a cookie kept for the token's whole lifetime
+            // (JWT_EXPIRE). Otherwise a session cookie, gone when the browser
+            // closes, holding a token that also expires within 12 hours in case
+            // the browser stays open or restores its session
+            const token = generateToken(user._id, rememberMe ? undefined : SESSION_TOKEN_LIFETIME);
+            const cookieOptions = {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
+                sameSite: 'strict'
+            };
+            if (rememberMe) {
+                cookieOptions.maxAge = jwt.decode(token).exp * 1000 - Date.now();
+            }
+            res.cookie('token', token, cookieOptions);
 
             res.json({
                 success: true,

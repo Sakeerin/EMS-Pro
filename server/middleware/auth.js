@@ -89,11 +89,9 @@ export const authorize = (...roles) => {
     };
 };
 
-// Generate JWT token
-export const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRE || '7d'
-    });
+// Generate JWT token (JWT_EXPIRE long unless a shorter lifetime is given)
+export const generateToken = (id, expiresIn = process.env.JWT_EXPIRE || '7d') => {
+    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn });
 };
 
 // Role helper functions
