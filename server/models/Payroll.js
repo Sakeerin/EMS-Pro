@@ -76,7 +76,10 @@ const payrollSchema = new mongoose.Schema({
         type: String
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    // Every save checks the version it loaded, so concurrent edits and status
+    // changes can't overwrite each other
+    optimisticConcurrency: true
 });
 
 // Compound index for unique payroll per employee per month/year

@@ -5,6 +5,45 @@ import Payroll from '../models/Payroll.js';
 import Employee from '../models/Employee.js';
 import Attendance from '../models/Attendance.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { objectIdParam } from '../middleware/validators.js';
+
+// What an admin may adjust on a payroll before it's approved; everything else
+// (base salary, approved overtime, social security, late deductions and the
+// totals) is calculated by the system
+const EDITABLE_FIELDS = {
+    bonus: true,
+    allowances: ['housing', 'transport', 'meal', 'other'],
+    deductions: ['tax', 'providentFund', 'other'],
+    notes: true,
+    paymentMethod: true
+};
+
+// Body keys outside EDITABLE_FIELDS, as dotted paths
+const nonEditableFields = (body) => Object.entries(body).flatMap(([key, value]) => {
+    const allowed = EDITABLE_FIELDS[key];
+    if (!allowed) return [key];
+    if (Array.isArray(allowed)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return [key];
+        return Object.keys(value).filter(sub => !allowed.includes(sub)).map(sub => `${key}.${sub}`);
+    }
+    return [];
+});
+
+const isOwnPayroll = (req, payroll) => Boolean(req.user.employee) && payroll.employee.equals(req.user.employee);
+
+// Payroll saves are version-checked, so two admins acting on the same record at
+// once can't, say, approve it while an edit lands
+const sendPayrollWriteError = (res, error, fallback) => {
+    if (error.name === 'VersionError') {
+        return res.status(409).json({
+            success: false,
+            message: 'This payroll was changed by someone else. Reload and try again.'
+        });
+    }
+    res.status(500).json({ success: false, message: fallback });
+};
+
+const payrollIdParam = objectIdParam('id', 'Invalid payroll ID');
 
 // Validation middleware helper
 const validate = (req, res, next) => {
@@ -196,7 +235,7 @@ router.post('/generate',
 // @route   GET /api/payroll/:id
 // @desc    Get payroll by ID (payslip)
 // @access  Private
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, [payrollIdParam], validate, async (req, res) => {
     try {
         const payroll = await Payroll.findById(req.params.id)
             .populate({
@@ -233,15 +272,36 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // @route   PUT /api/payroll/:id
-// @desc    Update payroll record
-// @access  Private (Admin, HR)
-router.put('/:id', protect, authorize('superadmin', 'admin'), async (req, res) => {
+// @desc    Adjust a draft payroll (bonus, allowances, tax and other deductions,
+//          notes, payment method); totals are recalculated
+// @access  Private (Admin)
+router.put('/:id',
+    protect,
+    authorize('superadmin', 'admin'),
+    [
+        payrollIdParam,
+        body(['bonus', 'allowances.*', 'deductions.*'])
+            .optional()
+            .isFloat({ min: 0 }).withMessage('Amounts must be numbers of 0 or more'),
+        body('notes')
+            .optional()
+            .isString().isLength({ max: 1000 }).withMessage('Notes must be text of at most 1000 characters'),
+        body('paymentMethod')
+            .optional()
+            .isIn(['bank_transfer', 'cash', 'cheque']).withMessage('Invalid payment method'),
+    ],
+    validate,
+    async (req, res) => {
     try {
-        const payroll = await Payroll.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        );
+        const refused = nonEditableFields(req.body);
+        if (refused.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `These fields can't be changed: ${refused.join(', ')}`
+            });
+        }
+
+        const payroll = await Payroll.findById(req.params.id);
 
         if (!payroll) {
             return res.status(404).json({
@@ -249,29 +309,45 @@ router.put('/:id', protect, authorize('superadmin', 'admin'), async (req, res) =
                 message: 'Payroll record not found'
             });
         }
+
+        if (!['draft', 'pending'].includes(payroll.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only draft payroll can be changed'
+            });
+        }
+
+        if (isOwnPayroll(req, payroll)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You cannot change your own payroll'
+            });
+        }
+
+        // Set field by field so untouched allowances and deductions keep their values
+        const { bonus, allowances = {}, deductions = {}, notes, paymentMethod } = req.body;
+        if (bonus !== undefined) payroll.bonus = Number(bonus);
+        for (const [key, value] of Object.entries(allowances)) payroll.set(`allowances.${key}`, Number(value));
+        for (const [key, value] of Object.entries(deductions)) payroll.set(`deductions.${key}`, Number(value));
+        if (notes !== undefined) payroll.notes = notes;
+        if (paymentMethod !== undefined) payroll.paymentMethod = paymentMethod;
+        await payroll.save(); // recalculates the totals
 
         res.json({
             success: true,
             data: payroll
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        sendPayrollWriteError(res, error, 'Failed to update payroll');
     }
 });
 
 // @route   PUT /api/payroll/:id/approve
 // @desc    Approve payroll
 // @access  Private (Admin)
-router.put('/:id/approve', protect, authorize('superadmin', 'admin'), async (req, res) => {
+router.put('/:id/approve', protect, authorize('superadmin', 'admin'), [payrollIdParam], validate, async (req, res) => {
     try {
-        const payroll = await Payroll.findByIdAndUpdate(
-            req.params.id,
-            { status: 'approved' },
-            { new: true }
-        );
+        const payroll = await Payroll.findById(req.params.id);
 
         if (!payroll) {
             return res.status(404).json({
@@ -279,6 +355,23 @@ router.put('/:id/approve', protect, authorize('superadmin', 'admin'), async (req
                 message: 'Payroll record not found'
             });
         }
+
+        if (!['draft', 'pending'].includes(payroll.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only draft payroll can be approved'
+            });
+        }
+
+        if (isOwnPayroll(req, payroll)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You cannot approve your own payroll'
+            });
+        }
+
+        payroll.status = 'approved';
+        await payroll.save();
 
         res.json({
             success: true,
@@ -286,26 +379,16 @@ router.put('/:id/approve', protect, authorize('superadmin', 'admin'), async (req
             data: payroll
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        sendPayrollWriteError(res, error, 'Failed to approve payroll');
     }
 });
 
 // @route   PUT /api/payroll/:id/pay
-// @desc    Mark payroll as paid
+// @desc    Mark approved payroll as paid
 // @access  Private (Admin)
-router.put('/:id/pay', protect, authorize('superadmin', 'admin'), async (req, res) => {
+router.put('/:id/pay', protect, authorize('superadmin', 'admin'), [payrollIdParam], validate, async (req, res) => {
     try {
-        const payroll = await Payroll.findByIdAndUpdate(
-            req.params.id,
-            {
-                status: 'paid',
-                paymentDate: new Date()
-            },
-            { new: true }
-        );
+        const payroll = await Payroll.findById(req.params.id);
 
         if (!payroll) {
             return res.status(404).json({
@@ -314,16 +397,31 @@ router.put('/:id/pay', protect, authorize('superadmin', 'admin'), async (req, re
             });
         }
 
+        if (payroll.status !== 'approved') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only approved payroll can be marked as paid'
+            });
+        }
+
+        if (isOwnPayroll(req, payroll)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You cannot mark your own payroll as paid'
+            });
+        }
+
+        payroll.status = 'paid';
+        payroll.paymentDate = new Date();
+        await payroll.save();
+
         res.json({
             success: true,
             message: 'Payroll marked as paid',
             data: payroll
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        sendPayrollWriteError(res, error, 'Failed to mark payroll as paid');
     }
 });
 

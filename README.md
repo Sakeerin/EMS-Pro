@@ -31,6 +31,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 ### 💰 Payroll
 - Salary management
 - Automatic payroll calculation for any of the last 24 months; only approved overtime is paid, so approve overtime before generating (the result says how many entries were still pending)
+- Draft → approved → paid workflow; before approval, `PUT /api/payroll/:id` can adjust the bonus, allowances, tax, provident fund and other deductions, notes and payment method (totals are recalculated); nobody changes, approves or pays their own payroll
 - Payslip generation
 
 ### 📊 Dashboard
@@ -178,6 +179,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-leave-rules.js` | Leave rules: employees cancel pending or not-yet-started approved leave (HR can cancel any), no approving or rejecting your own request, no overlapping requests |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
 | `node scripts/verify-overtime.js` | Lunch hour deducted from long days, overtime pending until an HR role approves it (not their own), payroll pays approved overtime only (writes test attendance through MongoDB; skips the payroll check if January 2001 already has payroll) |
+| `node scripts/verify-payroll-updates.js` | Payroll edits limited to adjustments (bonus, allowances, tax/provident fund/other deductions, notes, payment method) with totals recalculated, draft → approved → paid with no skipping or going back, no edits after approval, nobody edits/approves/pays their own payroll, version-checked saves (writes test payroll through MongoDB) |
 | `node scripts/verify-attendance-and-status.js` | Only HR/admin roles can record attendance for someone else; terminating or deactivating an employee blocks their login (and open sessions), reactivating allows it again |
 | `node scripts/verify-access-control.js` | Employees see only their own record (no list, stats or colleagues' salary/bank data), list size capped, self-registration closed, profile-less accounts see no leave requests |
 | `node scripts/verify-write-errors.js` | Employee and department forms get a 400 with the reason (invalid value, duplicate ID/email/name/code) instead of a 500 |

@@ -71,13 +71,18 @@ const PayrollPage = () => {
         }
     };
 
+    // My Payslips rows are always the viewer's own; All Payroll rows carry the employee
+    const isOwnPayroll = (payroll) =>
+        activeTab === 'my' || (Boolean(user?.employee?._id) && payroll.employee?._id === user.employee._id);
+
     const handleApprove = async (id) => {
         try {
             await payrollAPI.approve(id);
             toast.success('Payroll approved');
             fetchPayrolls();
         } catch (error) {
-            toast.error('Failed to approve payroll');
+            toast.error(error.response?.data?.message || 'Failed to approve payroll');
+            fetchPayrolls();
         }
     };
 
@@ -87,7 +92,8 @@ const PayrollPage = () => {
             toast.success('Payroll marked as paid');
             fetchPayrolls();
         } catch (error) {
-            toast.error('Failed to mark as paid');
+            toast.error(error.response?.data?.message || 'Failed to mark as paid');
+            fetchPayrolls();
         }
     };
 
@@ -230,7 +236,8 @@ const PayrollPage = () => {
                                                 >
                                                     <FiFileText />
                                                 </button>
-                                                {isAdmin && payroll.status === 'draft' && (
+                                                {/* No approving or paying your own payroll (the server refuses it too) */}
+                                                {isAdmin && !isOwnPayroll(payroll) && payroll.status === 'draft' && (
                                                     <button
                                                         onClick={() => handleApprove(payroll._id)}
                                                         className="btn btn-success btn-sm btn-icon"
@@ -239,7 +246,7 @@ const PayrollPage = () => {
                                                         <FiCheck />
                                                     </button>
                                                 )}
-                                                {isAdmin && payroll.status === 'approved' && (
+                                                {isAdmin && !isOwnPayroll(payroll) && payroll.status === 'approved' && (
                                                     <button
                                                         onClick={() => handleMarkPaid(payroll._id)}
                                                         className="btn btn-primary btn-sm btn-icon"
