@@ -8,9 +8,9 @@
 // Needs MongoDB (replica set) and Redis running. Settings come from .env;
 // override them with TEST_MONGODB_URI, TEST_REDIS_URL and TEST_PORT.
 // Exits 0 when every script passed, 1 when one failed, 2 when the test
-// environment couldn't be set up.
+// environment couldn't be set up, 130/143 when interrupted (Ctrl+C / SIGTERM).
 
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -35,30 +35,65 @@ const indent = (text) => text.trimEnd().split('\n').map((line) => `    ${line}`)
 let mongo = null;
 let redis = null;
 let api = null;
-let cleanedUp = false;
+let currentChild = null;
+let interrupted = null;
+// Set once this run has started replacing the test data. A run refused
+// earlier (say, because another npm test holds the port) must leave that
+// run's data alone
+let ownsTestData = false;
+let cleanupPromise = null;
 
-// Always leaves nothing behind: no API process, no test data
-const cleanUp = async () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    if (api) await api.stop();
-    if (mongo) {
-        await mongo.dropDatabase().catch(() => {});
-        await mongo.close().catch(() => {});
-    }
-    if (redis) {
-        await redis.flushDb().catch(() => {});
-        await redis.quit().catch(() => {});
-    }
+// Leaves nothing behind: no API process, no test data. Every caller waits for
+// the same clean-up, so exiting can't cut it short
+const cleanUp = () => {
+    cleanupPromise ??= (async () => {
+        currentChild?.kill();
+        if (api) await api.stop();
+        if (mongo) {
+            if (ownsTestData) await mongo.dropDatabase().catch(() => {});
+            await mongo.close().catch(() => {});
+        }
+        if (redis) {
+            if (ownsTestData) await redis.flushDb().catch(() => {});
+            await redis.quit().catch(() => {});
+        }
+    })();
+    return cleanupPromise;
 };
 
+// Ctrl+C or SIGTERM: stop the running script and the API at once; the main
+// flow then stops at its next step, cleans up and exits 130/143
+const INTERRUPTED = new Error('interrupted');
+const stopIfInterrupted = () => {
+    if (interrupted) throw INTERRUPTED;
+};
 for (const signal of ['SIGINT', 'SIGTERM']) {
-    process.on(signal, async () => {
+    process.on(signal, () => {
+        if (interrupted) return;
+        interrupted = signal;
         console.error(`\n${signal} received: stopping the test API and removing test data`);
-        await cleanUp();
-        process.exit(130);
+        currentChild?.kill();
+        api?.stop();
+        // Last resort if the main flow doesn't wind down
+        setTimeout(() => cleanUp().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143)), 20 * 1000).unref();
     });
 }
+
+// Runs a node script to the end without blocking the event loop, so signals
+// are handled straight away and the API's output keeps being read
+const runNode = (file, env, timeoutMs) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [file], { cwd: SERVER_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    currentChild = child;
+    let output = '';
+    child.stdout.on('data', (chunk) => { output += chunk; });
+    child.stderr.on('data', (chunk) => { output += chunk; });
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.on('close', (status, signal) => {
+        clearTimeout(timer);
+        if (currentChild === child) currentChild = null;
+        resolve({ status, signal, output });
+    });
+});
 
 const settings = () => {
     if (!process.env.TEST_MONGODB_URI && !process.env.MONGODB_URI) {
@@ -111,19 +146,24 @@ try {
     });
     redis = client;
     if (!(await isPortFree(port))) {
-        throw new SetupError(`Port ${port} is already in use. A test API from an earlier run may still be running: stop it, or set TEST_PORT to another port.`);
+        throw new SetupError(`Port ${port} is already in use: another npm test may be running, or a test API left over from an interrupted run. Wait for it to finish (or stop the leftover API). A run in parallel needs its own TEST_PORT, TEST_MONGODB_URI and TEST_REDIS_URL.`);
     }
+    stopIfInterrupted();
 
     // A clean, seeded test database, whatever an earlier run left behind
+    ownsTestData = true;
     await mongo.dropDatabase();
     await redis.flushDb();
-    const seed = spawnSync(process.execPath, [path.join(__dirname, 'seed.js')], { cwd: SERVER_DIR, env, encoding: 'utf8', timeout: 2 * 60 * 1000 });
+    const seed = await runNode(path.join(__dirname, 'seed.js'), env, 2 * 60 * 1000);
+    stopIfInterrupted();
     if (seed.status !== 0) {
-        throw new SetupError(`Seeding the test database failed:\n${indent(`${seed.stdout || ''}${seed.stderr || ''}`)}`);
+        throw new SetupError(`Seeding the test database failed:\n${indent(seed.output)}`);
     }
 
     api = startApi({ cwd: SERVER_DIR, env });
-    if (!(await waitForHealth(apiUrl, { timeoutMs: 30 * 1000, hasExited: api.hasExited }))) {
+    const healthy = await waitForHealth(apiUrl, { timeoutMs: 30 * 1000, hasExited: api.hasExited });
+    stopIfInterrupted();
+    if (!healthy) {
         throw new SetupError(`The test API didn't start on port ${port}. Its log:\n${indent(api.logTail())}`);
     }
     console.log(`Test environment: database ${dbName}, Redis ${redisLabel}, API ${apiUrl}`);
@@ -137,22 +177,21 @@ try {
 
     const results = [];
     for (const name of scripts) {
+        stopIfInterrupted();
         await clearRateLimits();
         process.stdout.write(`${name.padEnd(42)}`);
-        const run = spawnSync(process.execPath, [path.join(__dirname, name)], {
-            cwd: SERVER_DIR,
-            env,
-            encoding: 'utf8',
-            timeout: 5 * 60 * 1000
-        });
-        const output = `${run.stdout || ''}${run.stderr || ''}`;
-        const passed = (output.match(/^PASS /gm) || []).length;
-        const failed = (output.match(/^FAIL /gm) || []).length;
+        const run = await runNode(path.join(__dirname, name), env, 5 * 60 * 1000);
+        if (interrupted) {
+            console.log('interrupted');
+            stopIfInterrupted();
+        }
+        const passed = (run.output.match(/^PASS /gm) || []).length;
+        const failed = (run.output.match(/^FAIL /gm) || []).length;
         const ok = run.status === 0;
         results.push({ name, ok, passed });
         console.log(ok ? `ok      ${passed} checks` : `FAILED  ${failed} failing check(s), exit ${run.status ?? run.signal}`);
         if (!ok) {
-            console.log(indent(output));
+            console.log(indent(run.output));
             console.log('    --- test API log (last lines) ---');
             console.log(indent(api.logTail(30)));
         }
@@ -167,9 +206,12 @@ try {
         : `${failedScripts.length} of ${scriptCount} failed: ${failedScripts.map((result) => result.name).join(', ')}`);
     exitCode = failedScripts.length === 0 ? 0 : 1;
 } catch (error) {
-    console.error(error instanceof SetupError ? error.message : error);
-    exitCode = 2;
+    // After an interrupt, errors from the stopped API or closing connections are expected
+    if (!interrupted) {
+        console.error(error instanceof SetupError ? error.message : error);
+        exitCode = 2;
+    }
 } finally {
     await cleanUp();
 }
-process.exit(exitCode);
+process.exit(interrupted ? (interrupted === 'SIGINT' ? 130 : 143) : exitCode);
