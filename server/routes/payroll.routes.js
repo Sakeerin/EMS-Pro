@@ -257,12 +257,22 @@ router.get('/:id', protect, [payrollIdParam], validate, async (req, res) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'employee' && payroll.employee._id.toString() !== req.user.employee?.toString()) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to view this payslip'
-            });
+        // HR and admin roles see any payslip. Everyone else sees only their own,
+        // and only once it's final: the same payslips GET /my lists
+        if (!['superadmin', 'admin', 'hr'].includes(req.user.role)) {
+            const isOwn = Boolean(req.user.employee) && Boolean(payroll.employee) && payroll.employee._id.equals(req.user.employee);
+            if (!isOwn) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Not authorized to view this payslip'
+                });
+            }
+            if (!['approved', 'paid'].includes(payroll.status)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "This payslip isn't final yet"
+                });
+            }
         }
 
         res.json({
@@ -270,9 +280,10 @@ router.get('/:id', protect, [payrollIdParam], validate, async (req, res) => {
             data: payroll
         });
     } catch (error) {
+        console.error('payslip failed:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Failed to load payslip'
         });
     }
 });
