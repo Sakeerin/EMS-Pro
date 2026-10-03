@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FiPlus, FiCheck, FiX, FiCalendar, FiClock } from 'react-icons/fi';
 import { leaveAPI } from '../../services/api';
@@ -7,13 +7,17 @@ import toast from 'react-hot-toast';
 import './Leave.css';
 
 const LeavePage = () => {
-    const { isHR, canApproveLeaves, user } = useAuth();
+    const { canApproveLeaves, user } = useAuth();
+    // Accounts without an employee profile (e.g. a bootstrap superadmin) have no
+    // leave of their own: no balance, no "My Leaves", no requests
+    const hasProfile = Boolean(user?.employee);
     const [leaves, setLeaves] = useState([]);
     const [balance, setBalance] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [activeTab, setActiveTab] = useState('my');
+    const [activeTab, setActiveTab] = useState(hasProfile || !canApproveLeaves ? 'my' : 'all');
+    const latestRequest = useRef(0);
     const [formData, setFormData] = useState({
         type: 'annual',
         startDate: '',
@@ -26,19 +30,41 @@ const LeavePage = () => {
     }, [activeTab]);
 
     const fetchData = async () => {
+        // Switching tabs quickly can return responses out of order; only the
+        // latest request may update the page
+        const requestId = ++latestRequest.current;
+        const isLatest = () => requestId === latestRequest.current;
         setLoading(true);
-        try {
-            const [leavesRes, balanceRes] = await Promise.all([
-                activeTab === 'my' ? leaveAPI.getMy() : leaveAPI.getAll(),
-                leaveAPI.getBalance()
-            ]);
-            setLeaves(leavesRes.data.data || []);
-            setBalance(balanceRes.data.data);
-        } catch (error) {
-            console.error('Failed to fetch leaves:', error);
-        } finally {
-            setLoading(false);
+
+        // Loaded separately so a failed balance doesn't hide the list (and vice versa)
+        const loadLeaves = async () => {
+            if (activeTab === 'my' && !hasProfile) return [];
+            const res = activeTab === 'my' ? await leaveAPI.getMy() : await leaveAPI.getAll();
+            return res.data.data || [];
+        };
+        const loadBalance = async () => {
+            if (!hasProfile) return null;
+            const res = await leaveAPI.getBalance();
+            return res.data.data;
+        };
+
+        const [leavesResult, balanceResult] = await Promise.allSettled([loadLeaves(), loadBalance()]);
+        if (!isLatest()) return;
+
+        if (leavesResult.status === 'fulfilled') {
+            setLeaves(leavesResult.value);
+        } else {
+            console.error('Failed to fetch leaves:', leavesResult.reason);
+            setLeaves([]);
+            toast.error('Failed to load leave requests');
         }
+        if (balanceResult.status === 'fulfilled') {
+            setBalance(balanceResult.value);
+        } else {
+            console.error('Failed to fetch leave balance:', balanceResult.reason);
+            setBalance(null);
+        }
+        setLoading(false);
     };
 
     const handleSubmit = async (e) => {
@@ -84,11 +110,13 @@ const LeavePage = () => {
             <div className="page-header">
                 <div>
                     <h1 className="page-title">Leave Management</h1>
-                    <p className="page-subtitle">Manage your time off</p>
+                    <p className="page-subtitle">{!hasProfile && canApproveLeaves ? 'Review leave requests' : 'Manage your time off'}</p>
                 </div>
-                <button onClick={() => setShowModal(true)} className="btn btn-primary">
-                    <FiPlus /> Request Leave
-                </button>
+                {hasProfile && (
+                    <button onClick={() => setShowModal(true)} className="btn btn-primary">
+                        <FiPlus /> Request Leave
+                    </button>
+                )}
             </div>
 
             {/* Leave Balance Cards */}
@@ -138,8 +166,8 @@ const LeavePage = () => {
                 </div>
             )}
 
-            {/* Tabs */}
-            {canApproveLeaves && (
+            {/* Tabs (without a profile there's only "All Requests") */}
+            {canApproveLeaves && hasProfile && (
                 <div className="tabs">
                     <button
                         className={`tab ${activeTab === 'my' ? 'active' : ''}`}
@@ -183,7 +211,9 @@ const LeavePage = () => {
                             ) : leaves.length === 0 ? (
                                 <tr>
                                     <td colSpan={activeTab === 'all' ? 7 : 5} className="text-center text-secondary" style={{ padding: 40 }}>
-                                        No leave requests found
+                                        {activeTab === 'my' && !hasProfile
+                                            ? "Your account isn't linked to an employee profile yet, so you can't request leave. Ask HR to link it."
+                                            : 'No leave requests found'}
                                     </td>
                                 </tr>
                             ) : (

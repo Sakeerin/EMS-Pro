@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FiDollarSign, FiFileText, FiDownload, FiCheck } from 'react-icons/fi';
 import { payrollAPI } from '../../services/api';
@@ -6,40 +6,63 @@ import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import './Payroll.css';
 
+// The current month and the 23 before it, newest first
+const PERIOD_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() - i);
+    return { month: date.getMonth() + 1, year: date.getFullYear() };
+});
+
+const periodKey = (period) => `${period.year}-${period.month}`;
+
 const PayrollPage = () => {
-    const { isHR, isAdmin } = useAuth();
+    const { isHR, isAdmin, user } = useAuth();
+    // Accounts without an employee profile (e.g. a bootstrap superadmin) have no payslips
+    const hasProfile = Boolean(user?.employee);
     const [payrolls, setPayrolls] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(isHR ? 'all' : 'my');
     const [selectedPayroll, setSelectedPayroll] = useState(null);
     const [generating, setGenerating] = useState(false);
-
-    const currentMonth = new Date().getMonth() + 1;
-    const currentYear = new Date().getFullYear();
+    const [period, setPeriod] = useState(PERIOD_OPTIONS[0]);
+    const latestRequest = useRef(0);
 
     useEffect(() => {
         fetchPayrolls();
-    }, [activeTab]);
+    }, [activeTab, period]);
 
     const fetchPayrolls = async () => {
+        // Switching tabs or periods quickly can return responses out of order;
+        // only the latest request may update the table
+        const requestId = ++latestRequest.current;
+        if (activeTab === 'my' && !hasProfile) {
+            setPayrolls([]);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const response = activeTab === 'my'
                 ? await payrollAPI.getMy()
-                : await payrollAPI.getAll({ month: currentMonth, year: currentYear });
-            setPayrolls(response.data.data);
+                : await payrollAPI.getAll({ month: period.month, year: period.year });
+            if (requestId === latestRequest.current) setPayrolls(response.data.data);
         } catch (error) {
             console.error('Failed to fetch payrolls:', error);
+            if (requestId === latestRequest.current) {
+                setPayrolls([]);
+                toast.error('Failed to load payroll');
+            }
         } finally {
-            setLoading(false);
+            if (requestId === latestRequest.current) setLoading(false);
         }
     };
 
     const handleGenerate = async () => {
         setGenerating(true);
         try {
-            await payrollAPI.generate({ month: currentMonth, year: currentYear });
-            toast.success('Payroll generated successfully');
+            const { data } = await payrollAPI.generate({ month: period.month, year: period.year });
+            toast.success(data.message || 'Payroll generated');
             fetchPayrolls();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to generate payroll');
@@ -94,22 +117,40 @@ const PayrollPage = () => {
             <div className="page-header">
                 <div>
                     <h1 className="page-title">Payroll</h1>
-                    <p className="page-subtitle">{getMonthName(currentMonth)} {currentYear}</p>
+                    <p className="page-subtitle">
+                        {activeTab === 'all' ? `${getMonthName(period.month)} ${period.year}` : 'Your approved and paid payslips'}
+                    </p>
                 </div>
-                {isAdmin && (
-                    <button
-                        onClick={handleGenerate}
-                        className="btn btn-primary"
-                        disabled={generating}
-                    >
-                        <FiDollarSign />
-                        {generating ? 'Generating...' : 'Generate Payroll'}
-                    </button>
+                {activeTab === 'all' && (
+                    <div className="payroll-actions">
+                        <select
+                            className="form-input form-select payroll-period"
+                            aria-label="Payroll period"
+                            value={periodKey(period)}
+                            onChange={(e) => setPeriod(PERIOD_OPTIONS.find(p => periodKey(p) === e.target.value))}
+                        >
+                            {PERIOD_OPTIONS.map(p => (
+                                <option key={periodKey(p)} value={periodKey(p)}>
+                                    {getMonthName(p.month)} {p.year}
+                                </option>
+                            ))}
+                        </select>
+                        {isAdmin && (
+                            <button
+                                onClick={handleGenerate}
+                                className="btn btn-primary"
+                                disabled={generating}
+                            >
+                                <FiDollarSign />
+                                {generating ? 'Generating...' : 'Generate Payroll'}
+                            </button>
+                        )}
+                    </div>
                 )}
             </div>
 
             {/* Tabs */}
-            {isHR && (
+            {isHR && hasProfile && (
                 <div className="tabs">
                     <button
                         className={`tab ${activeTab === 'my' ? 'active' : ''}`}
@@ -154,7 +195,11 @@ const PayrollPage = () => {
                             ) : payrolls.length === 0 ? (
                                 <tr>
                                     <td colSpan={activeTab === 'all' ? 8 : 7} className="text-center text-secondary" style={{ padding: 40 }}>
-                                        No payroll records found
+                                        {activeTab === 'all'
+                                            ? `No payroll records for ${getMonthName(period.month)} ${period.year}`
+                                            : hasProfile
+                                                ? 'No payslips yet'
+                                                : "Your account isn't linked to an employee profile yet, so there are no payslips to show. Ask HR to link it."}
                                     </td>
                                 </tr>
                             ) : (

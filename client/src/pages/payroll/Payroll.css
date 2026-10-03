@@ -77,3 +77,24 @@
     font-size: 18px;
     font-weight: 700;
 }
+.payroll-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.payroll-period {
+    width: auto;
+    min-width: 180px;
+}
+
+@media (max-width: 768px) {
+    .payroll-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .payroll-period {
+        flex: 1;
+    }
+}
