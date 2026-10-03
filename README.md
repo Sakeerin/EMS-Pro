@@ -26,7 +26,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 ### 🏖️ Leave Management
 - Multiple leave types (annual, sick, personal)
 - Approval workflow
-- Leave balance tracking per calendar year: each request counts against the quota of the year it falls in (`GET /api/leaves/balance?year=` reads any year)
+- Leave balance tracking per calendar year: each request counts against the quota of the year it falls in (`GET /api/leaves/balance?year=` reads any year); days waiting for approval are shown and already taken off what remains
 - A request stays within one calendar year (split year-end leave into two requests) and can be dated from last year to next year
 
 ### 💰 Payroll
@@ -179,6 +179,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-attendance-trend.js` | Dashboard attendance trend is labelled with the last 7 days in the server's time zone, ending today, with each day's count under its own label (run on the same machine or time zone as the API) |
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-rules.js` | Leave rules: employees cancel pending or not-yet-started approved leave (HR can cancel any), no approving or rejecting your own request, no overlapping requests |
+| `node scripts/verify-leave-balance.js` | Leave balance reports pending days per type and takes them off what remains (the same number new requests are checked against); rejected and cancelled days come back |
 | `node scripts/verify-leave-dates.js` | Leave quotas per year of the request (and `?year=` on the balance), 31 December counted, no request across two years or outside last year..next year, YYYY-MM-DD dates only, huge ranges refused at once |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
 | `node scripts/verify-overtime.js` | Lunch hour deducted from long days, overtime pending until an HR role approves it (not their own), payroll pays approved overtime only (writes test attendance through MongoDB; skips the payroll check if January 2001 already has payroll) |

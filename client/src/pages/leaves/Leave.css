@@ -87,3 +87,8 @@
         grid-template-columns: 1fr;
     }
 }
+.balance-pending {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--warning);
+}

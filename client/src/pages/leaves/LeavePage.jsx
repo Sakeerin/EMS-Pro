@@ -6,6 +6,12 @@ import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import './Leave.css';
 
+const BALANCE_CARDS = [
+    ['annual', 'Annual Leave'],
+    ['sick', 'Sick Leave'],
+    ['personal', 'Personal Leave']
+];
+
 const LeavePage = () => {
     const { canApproveLeaves, user } = useAuth();
     // Accounts without an employee profile (e.g. a bootstrap superadmin) have no
@@ -122,50 +128,30 @@ const LeavePage = () => {
                 )}
             </div>
 
-            {/* Leave Balance Cards */}
+            {/* Leave Balance Cards: remaining already excludes days waiting for approval */}
             {balance && (
                 <div className="leave-balance-grid">
-                    <div className="leave-balance-card annual">
-                        <h4>Annual Leave</h4>
-                        <div className="balance-numbers">
-                            <span className="remaining">{balance.annual?.remaining || 0}</span>
-                            <span className="total">/ {balance.annual?.total || 0}</span>
-                        </div>
-                        <div className="balance-bar">
-                            <div
-                                className="balance-progress"
-                                style={{ width: `${((balance.annual?.remaining || 0) / (balance.annual?.total || 1)) * 100}%` }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="leave-balance-card sick">
-                        <h4>Sick Leave</h4>
-                        <div className="balance-numbers">
-                            <span className="remaining">{balance.sick?.remaining || 0}</span>
-                            <span className="total">/ {balance.sick?.total || 0}</span>
-                        </div>
-                        <div className="balance-bar">
-                            <div
-                                className="balance-progress"
-                                style={{ width: `${((balance.sick?.remaining || 0) / (balance.sick?.total || 1)) * 100}%` }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="leave-balance-card personal">
-                        <h4>Personal Leave</h4>
-                        <div className="balance-numbers">
-                            <span className="remaining">{balance.personal?.remaining || 0}</span>
-                            <span className="total">/ {balance.personal?.total || 0}</span>
-                        </div>
-                        <div className="balance-bar">
-                            <div
-                                className="balance-progress"
-                                style={{ width: `${((balance.personal?.remaining || 0) / (balance.personal?.total || 1)) * 100}%` }}
-                            />
-                        </div>
-                    </div>
+                    {BALANCE_CARDS.map(([type, title]) => {
+                        const { total = 0, pending = 0, remaining = 0 } = balance[type] || {};
+                        return (
+                            <div key={type} className={`leave-balance-card ${type}`}>
+                                <h4>{title}</h4>
+                                <div className="balance-numbers">
+                                    <span className="remaining">{remaining}</span>
+                                    <span className="total">/ {total}</span>
+                                </div>
+                                <div className="balance-bar">
+                                    <div
+                                        className="balance-progress"
+                                        style={{ width: `${Math.min(Math.max(remaining / (total || 1), 0), 1) * 100}%` }}
+                                    />
+                                </div>
+                                {pending > 0 && (
+                                    <p className="balance-pending">{pending} {pending === 1 ? 'day' : 'days'} waiting for approval</p>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

@@ -114,42 +114,34 @@ export const getLeaveBalance = async (req, res) => {
 
         const employee = await Employee.findById(req.user.employee);
 
-        // Leave approved in that year (a request never spans two years)
-        const usedLeaves = await Leave.aggregate([
+        // Approved and pending days in that year (a request never spans two years)
+        const daysByTypeAndStatus = await Leave.aggregate([
             {
                 $match: {
                     employee: employee._id,
-                    status: 'approved',
+                    status: { $in: ['approved', 'pending'] },
                     startDate: inYear(year)
                 }
             },
             {
                 $group: {
-                    _id: '$type',
+                    _id: { type: '$type', status: '$status' },
                     totalDays: { $sum: '$days' }
                 }
             }
         ]);
+        const daysOf = (type, status) =>
+            daysByTypeAndStatus.find(d => d._id.type === type && d._id.status === status)?.totalDays || 0;
 
-        const balance = {
-            year,
-            annual: {
-                total: employee.leaveBalance.annual,
-                used: usedLeaves.find(l => l._id === 'annual')?.totalDays || 0
-            },
-            sick: {
-                total: employee.leaveBalance.sick,
-                used: usedLeaves.find(l => l._id === 'sick')?.totalDays || 0
-            },
-            personal: {
-                total: employee.leaveBalance.personal,
-                used: usedLeaves.find(l => l._id === 'personal')?.totalDays || 0
-            }
-        };
-
-        balance.annual.remaining = balance.annual.total - balance.annual.used;
-        balance.sick.remaining = balance.sick.total - balance.sick.used;
-        balance.personal.remaining = balance.personal.total - balance.personal.used;
+        // Pending requests already hold their days: remaining is what can still be
+        // requested, the same number createLeaveRequest checks against
+        const balance = { year };
+        for (const type of ['annual', 'sick', 'personal']) {
+            const total = employee.leaveBalance[type];
+            const used = daysOf(type, 'approved');
+            const pending = daysOf(type, 'pending');
+            balance[type] = { total, used, pending, remaining: total - used - pending };
+        }
 
         res.json({
             success: true,
