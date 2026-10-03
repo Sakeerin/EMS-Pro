@@ -137,12 +137,17 @@ router.post('/generate',
             attendanceByEmployee.get(empId).push(record);
         });
 
+        // Only overtime HR has approved is paid; pending overtime is reported back
+        const pendingOvertime = allAttendance.filter(a => a.overtimeStatus === 'pending').length;
+
         // Build payroll records using batch processing
         const payrollPayloads = [];
         for (const employee of employeesToProcess) {
             const empAttendance = attendanceByEmployee.get(employee._id.toString()) || [];
             const workingDays = empAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
-            const overtimeHours = empAttendance.reduce((sum, a) => sum + (a.overtime || 0), 0);
+            const overtimeHours = empAttendance
+                .filter(a => a.overtimeStatus === 'approved')
+                .reduce((sum, a) => sum + (a.overtime || 0), 0);
             const lateDays = empAttendance.filter(a => a.status === 'late').length;
 
             const rawPayload = {
@@ -172,9 +177,12 @@ router.post('/generate',
             payrollRecords = await Payroll.insertMany(payrollPayloads);
         }
 
+        const pendingNote = pendingOvertime > 0
+            ? ` (${pendingOvertime} overtime ${pendingOvertime === 1 ? 'entry was' : 'entries were'} still pending approval and not paid)`
+            : '';
         res.status(201).json({
             success: true,
-            message: `Generated payroll for ${payrollRecords.length} employees`,
+            message: `Generated payroll for ${payrollRecords.length} employees${pendingNote}`,
             data: payrollRecords
         });
     } catch (error) {

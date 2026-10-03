@@ -38,6 +38,17 @@ const attendanceSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    // Overtime is only paid once HR approves it
+    overtimeStatus: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none'
+    },
+    overtimeReviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    overtimeReviewedAt: Date,
     status: {
         type: String,
         enum: ['present', 'late', 'absent', 'half_day', 'holiday', 'weekend'],
@@ -59,9 +70,10 @@ attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
 attendanceSchema.pre('save', function (next) {
     if (this.checkIn?.time && this.checkOut?.time) {
         const diffMs = this.checkOut.time - this.checkIn.time;
-        let hours = diffMs / (1000 * 60 * 60);
+        const spanHours = diffMs / (1000 * 60 * 60);
 
-        // Deduct break times
+        // Recorded break times
+        let breakHours = 0;
         if (this.breaks && this.breaks.length > 0) {
             const totalBreakMs = this.breaks.reduce((total, b) => {
                 if (b.duration) {
@@ -72,11 +84,16 @@ attendanceSchema.pre('save', function (next) {
                 }
                 return total;
             }, 0);
-            
-            const breakHours = totalBreakMs / (1000 * 60 * 60);
-            hours = Math.max(0, hours - breakHours); // Ensure working hours don't go negative
+            breakHours = totalBreakMs / (1000 * 60 * 60);
         }
 
+        // Nothing records the lunch break, so a long day always loses at least
+        // the statutory unpaid hour
+        if (spanHours > BUSINESS_RULES.LUNCH_BREAK_AFTER_HOURS) {
+            breakHours = Math.max(breakHours, BUSINESS_RULES.LUNCH_BREAK_HOURS);
+        }
+
+        const hours = Math.max(0, spanHours - breakHours); // Ensure working hours don't go negative
         this.workingHours = Math.round(hours * 100) / 100;
 
         // Calculate overtime using standard working hours from BUSINESS_RULES
@@ -85,6 +102,19 @@ attendanceSchema.pre('save', function (next) {
             this.overtime = Math.round((hours - standardHours) * 100) / 100;
         } else {
             this.overtime = 0;
+        }
+
+        // New overtime, or hours changed after a review, waits for (another) HR decision
+        let overtimeStatus = this.overtimeStatus;
+        if (this.overtime === 0) {
+            overtimeStatus = 'none';
+        } else if (overtimeStatus === 'none' || this.isModified('checkIn') || this.isModified('checkOut')) {
+            overtimeStatus = 'pending';
+        }
+        if (overtimeStatus !== this.overtimeStatus) {
+            this.overtimeStatus = overtimeStatus;
+            this.overtimeReviewedBy = undefined;
+            this.overtimeReviewedAt = undefined;
         }
     }
     next();

@@ -1,8 +1,23 @@
 import express from 'express';
+import { body, validationResult } from 'express-validator';
 import Attendance from '../models/Attendance.js';
 import { BUSINESS_RULES } from '../config/constants.js';
 import Employee from '../models/Employee.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { objectIdParam } from '../middleware/validators.js';
+
+// Validation middleware helper
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            success: false,
+            message: 'Validation failed',
+            errors: errors.array().map(e => ({ field: e.path, message: e.msg }))
+        });
+    }
+    next();
+};
 
 const router = express.Router();
 
@@ -304,5 +319,85 @@ router.get('/report', protect, authorize('superadmin', 'admin', 'hr'), async (re
         });
     }
 });
+
+// @route   GET /api/attendance/overtime
+// @desc    Overtime waiting for a decision (or ?status=approved|rejected)
+// @access  Private (Admin, HR)
+router.get('/overtime', protect, authorize(...HR_ROLES), async (req, res) => {
+    try {
+        const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+
+        const records = await Attendance.find({ overtimeStatus: status })
+            .populate('employee', 'firstName lastName employeeId')
+            .sort({ date: -1 })
+            .limit(200);
+
+        res.json({
+            success: true,
+            data: records
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load overtime'
+        });
+    }
+});
+
+// @route   PUT /api/attendance/:id/overtime
+// @desc    Approve or reject a day's overtime
+// @access  Private (Admin, HR)
+router.put('/:id/overtime',
+    protect,
+    authorize(...HR_ROLES),
+    [
+        objectIdParam('id', 'Invalid attendance ID'),
+        body('decision').isIn(['approve', 'reject']).withMessage('Decision must be approve or reject'),
+    ],
+    validate,
+    async (req, res) => {
+        try {
+            const attendance = await Attendance.findById(req.params.id);
+
+            if (!attendance) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Attendance record not found'
+                });
+            }
+
+            if (attendance.overtimeStatus !== 'pending') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No overtime waiting for a decision on this record'
+                });
+            }
+
+            // Approvers can't decide on their own overtime
+            if (req.user.employee && attendance.employee.equals(req.user.employee)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'You cannot approve or reject your own overtime'
+                });
+            }
+
+            attendance.overtimeStatus = req.body.decision === 'approve' ? 'approved' : 'rejected';
+            attendance.overtimeReviewedBy = req.user._id;
+            attendance.overtimeReviewedAt = new Date();
+            await attendance.save();
+
+            res.json({
+                success: true,
+                message: `Overtime ${attendance.overtimeStatus}`,
+                data: attendance
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update overtime'
+            });
+        }
+    }
+);
 
 export default router;

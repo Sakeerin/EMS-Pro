@@ -1,6 +1,9 @@
 export const BUSINESS_RULES = {
     // Attendance Rules
     STANDARD_WORKING_HOURS: 8,
+    // Unpaid break due once a day passes 5 hours (Labour Protection Act s.27)
+    LUNCH_BREAK_HOURS: 1,
+    LUNCH_BREAK_AFTER_HOURS: 5,
     LATE_THRESHOLD_HOUR: 9, // 9:00 AM
     LATE_THRESHOLD_MINUTE: 0,
     

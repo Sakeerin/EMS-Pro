@@ -84,7 +84,9 @@ export const attendanceAPI = {
     checkOut: (data) => api.post('/attendance/check-out', data),
     getToday: () => api.get('/attendance/today'),
     getMy: (params) => api.get('/attendance/my', { params }),
-    getReport: (params) => api.get('/attendance/report', { params })
+    getReport: (params) => api.get('/attendance/report', { params }),
+    getOvertime: (params) => api.get('/attendance/overtime', { params }),
+    reviewOvertime: (id, decision) => api.put(`/attendance/${id}/overtime`, { decision })
 };
 
 // Leave API

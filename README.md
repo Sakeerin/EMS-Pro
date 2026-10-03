@@ -19,8 +19,8 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 
 ### ⏰ Attendance Tracking
 - Real-time check-in/check-out
-- Working hours calculation
-- Overtime tracking
+- Working hours calculation, with an unpaid 1-hour lunch break taken out of any day longer than 5 hours
+- Overtime (hours beyond 8) waits for HR/admin approval on the Attendance page; nobody approves their own
 - Attendance reports
 
 ### 🏖️ Leave Management
@@ -30,7 +30,7 @@ A modern, comprehensive Employee Management System built with MongoDB, Express.j
 
 ### 💰 Payroll
 - Salary management
-- Automatic payroll calculation
+- Automatic payroll calculation for any of the last 24 months; only approved overtime is paid, so approve overtime before generating (the result says how many entries were still pending)
 - Payslip generation
 
 ### 📊 Dashboard
@@ -171,6 +171,7 @@ npm test -- leave      # only scripts whose name contains "leave"
 | `node scripts/verify-dashboard-cache.js` | Dashboard stats cache is refreshed after successful writes (needs Redis) |
 | `node scripts/verify-leave-rules.js` | Leave rules: employees cancel pending or not-yet-started approved leave (HR can cancel any), no approving or rejecting your own request, no overlapping requests |
 | `node scripts/verify-leave-requests.js` | Leave requests: create, weekend-only and over-balance rejections, approve, reject, cancel |
+| `node scripts/verify-overtime.js` | Lunch hour deducted from long days, overtime pending until an HR role approves it (not their own), payroll pays approved overtime only (writes test attendance through MongoDB; skips the payroll check if January 2001 already has payroll) |
 | `node scripts/verify-attendance-and-status.js` | Only HR/admin roles can record attendance for someone else; terminating or deactivating an employee blocks their login (and open sessions), reactivating allows it again |
 | `node scripts/verify-access-control.js` | Employees see only their own record (no list, stats or colleagues' salary/bank data), list size capped, self-registration closed, profile-less accounts see no leave requests |
 | `node scripts/verify-write-errors.js` | Employee and department forms get a 400 with the reason (invalid value, duplicate ID/email/name/code) instead of a 500 |
@@ -186,6 +187,7 @@ Each script clears its own test data. When running scripts one by one, clear the
 - Set `NODE_ENV=production` so auth cookies are sent with `Secure`, and use a strong, unique `JWT_SECRET`.
 - Uploaded files (`/uploads/...`) are served by the API and require the login cookie; job description files are further limited to their employee and HR/admin roles. Route both `/api` and `/uploads` to the API on the same site as the frontend (the Vite dev server does this for you), or avatars and JD links won't load.
 - Point `REDIS_URL` at your Redis instance so rate limits are shared between server instances.
+- Attendance saved before overtime approval was introduced keeps its old hours (lunch not deducted) and has no approval status, so its overtime is never paid. Generate payroll for those months before upgrading, or adjust them by hand.
 - Existing accounts that were created by a SuperAdmin on the Users page are flagged to change their password, so they are sent to `/change-password` at their next request. Employees created before temporary passwords were introduced never received one; reset them from the Users page.
 
 ## 📁 Project Structure
